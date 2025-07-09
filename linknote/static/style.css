@@ -1,0 +1,352 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    line-height: 1.6;
+    background: #f5f5f5;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    margin-bottom: 30px;
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.search-box {
+    margin-bottom: 20px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.login-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#userInfo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#username {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+#qrCode {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+#qrCode canvas {
+    max-width: 100%;
+}
+
+#loginMethods {
+    margin: 20px 0;
+}
+
+#emailLogin {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 20px 0;
+}
+
+#emailLogin input[type="email"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+#emailLogin input[type="email"]:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+#sendLoginEmail {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#sendLoginEmail:hover {
+    background: #2980b9;
+}
+
+#loginStatus {
+    text-align: center;
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#loginStatus.error {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+#loginStatus.success {
+    background: #dcfce7;
+    color: #22c55e;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+}
+
+.sort-options {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sort-options select {
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+}
+
+button {
+    padding: 8px 16px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background: #2980b9;
+}
+
+#notesList {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.note-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.note-card h3 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.note-card .link {
+    color: #3498db;
+    text-decoration: none;
+    word-break: break-all;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.note-card .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.note-card .tag {
+    background: #edf2f7;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #4a5568;
+}
+
+.note-card .description {
+    font-size: 14px;
+    color: #4a5568;
+    margin-top: 10px;
+}
+
+.note-card .actions {
+    margin-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.note-card button.edit {
+    background: #2ecc71;
+}
+
+.note-card button.delete {
+    background: #e74c3c;
+}
+
+.dialog {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog.active {
+    display: flex;
+}
+
+.dialog-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+}
+
+.dialog-content h2 {
+    margin-bottom: 20px;
+}
+
+.dialog-content input:not([type="checkbox"]),
+.dialog-content textarea,
+.dialog-content select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.link-section {
+    margin-bottom: 15px;
+}
+
+.template-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.template-params {
+    margin-top: 10px;
+}
+
+.param-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.param-input label {
+    min-width: 100px;
+}
+
+.param-input input {
+    flex: 1;
+    margin-bottom: 0 !important;
+}
+
+.template-url-preview {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.note-card .metadata {
+    font-size: 12px;
+    color: #666;
+    margin: 5px 0;
+}
+
+.note-card .author {
+    font-weight: bold;
+}
+
+.note-card .timestamp {
+    margin-left: 10px;
+}
+
+.dialog-content textarea {
+    height: 150px;
+    resize: vertical;
+}
+
+.save-options {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.save-options label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+#customPath {
+    margin-top: 10px;
+}

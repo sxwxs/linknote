@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkNote</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LinkNote</h1>
+            <div class="search-box">
+                <input type="text" id="search" placeholder='Search (use quotes for phrases, e.g. "example phrase")'>
+            </div>
+            <div class="controls">
+                <div class="actions">
+                    <button id="newNote">New Note</button>
+                    <button id="saveAll">Save All</button>
+                </div>
+                <div class="sort-options">
+                    <label>Sort by:</label>
+                    <select id="sortBy">
+                        <option value="title">Title</option>
+                        <option value="createTime">Create Time</option>
+                        <option value="link">Link</option>
+                    </select>
+                </div>
+                <div class="login-section">
+                    <button id="loginBtn" style="display: none;">Login</button>
+                    <div id="userInfo" style="display: none;">
+                        <span id="username"></span>
+                        <button id="logoutBtn">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div id="notesList"></div>
+
+            <div id="editDialog" class="dialog">
+                <div class="dialog-content">
+                    <h2>Edit Note</h2>
+                    <input type="text" id="editTitle" placeholder="Title">
+                    <input type="text" id="editAuthor" placeholder="Author">
+                    
+                    <div class="link-section">
+                        <div class="template-check">
+                            <input type="checkbox" id="isTemplateUrl">
+                            <label for="isTemplateUrl">Template URL (use {param} for parameters)</label>
+                        </div>
+                        <input type="text" id="editLink" placeholder="Link URL">
+                        <div id="templateParams" class="template-params"></div>
+                    </div>
+
+                    <input type="text" id="editTags" placeholder="Tags (comma separated)">
+                    <textarea id="editDescription" placeholder="Description (markdown supported)"></textarea>
+                    
+                    <div class="save-options">
+                        <label>Save to:</label>
+                        <select id="saveLocation">
+                            <option value="default">Default Location (data.js)</option>
+                            <option value="custom">Custom Location...</option>
+                        </select>
+                        <input type="text" id="customPath" placeholder="Custom file path" style="display: none;">
+                        <select id="fileType" style="display: none;">
+                            <option value=".js">JavaScript (.js)</option>
+                            <option value=".json">JSON (.json)</option>
+                        </select>
+                    </div>
+
+                    <div class="dialog-buttons">
+                        <button id="saveNote">Save</button>
+                        <button id="duplicate" style="display: none;">Duplicate</button>
+                        <button id="cancelEdit">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="loginDialog" class="dialog">
+        <div class="dialog-content">
+            <h2>Login</h2>
+            <div id="loginMethods">
+                <div id="oauthLogin" style="display: none;">
+                    <div id="qrCode"></div>
+                    <p>Scan QR code to login</p>
+                </div>
+                <div id="emailLogin" style="display: none;">
+                    <p>Enter your email to receive a login link:</p>
+                    <input type="email" id="loginEmail" placeholder="your@email.com">
+                    <button id="sendLoginEmail">Send Login Link</button>
+                </div>
+            </div>
+            <div id="loginStatus"></div>
+            <div class="dialog-buttons">
+                <button id="cancelLogin">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load data.js if in static mode -->
+    <script>
+        // Check if we're running in static mode (not served by Flask)
+        if (window.location.protocol === 'file:') {
+            const script = document.createElement('script');
+            script.src = 'data.js';
+            document.head.appendChild(script);
+        }
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>

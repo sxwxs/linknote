@@ -1,0 +1,49 @@
+# LinkNote Default Configuration
+
+# Data directory configuration
+# If not set, will use default system path
+data_dir: null
+
+# Login configuration
+login:
+  # Enable/disable login requirement
+  enabled: false
+  
+  # Login type: "email" or "oauth"
+  type: "oauth"
+  
+  # Email login configuration
+  email:
+    # Enable/disable email login
+    enabled: false
+    # Email account for sending login links
+    account: ""
+    # Email password or app-specific password
+    password: ""
+    # SMTP server settings
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+  
+  # OAuth configuration (legacy)
+  # Application ID for authentication
+  appid: ""
+  
+  # Login request URL
+  # The system will append ?token=xxx&appid=xxx to this URL
+  login_request_url: ""
+  
+  # Callback settings for the authentication server
+  callback:
+    # List of allowed IP addresses that can call the callback API
+    ip_whitelist: []
+    
+    # Example:
+    # ip_whitelist:
+    #   - "10.0.0.1"
+    #   - "192.168.1.100"
+
+# Server configuration
+server:
+  # Session secret key for Flask sessions
+  # IMPORTANT: Change this in your actual config file!
+  secret_key: "change-this-in-your-config"
