@@ -6,6 +6,8 @@ import smtplib
 import time
 import io
 import base64
+import logging
+from logging.handlers import RotatingFileHandler
 from captcha.image import ImageCaptcha
 from datetime import datetime
 from pathlib import Path
@@ -91,7 +93,38 @@ def get_client_ip():
         return request.headers['X-Real-IP']
     return request.remote_addr
 
+def setup_logging(config: dict) -> None:
+    """Setup logging configuration."""
+    log_dir = Path('logs')
+    log_dir.mkdir(exist_ok=True)
+    
+    log_file = log_dir / 'auth.log'
+    
+    handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    handler.setFormatter(formatter)
+    
+    logger = logging.getLogger('auth')
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+
+def log_auth_event(event_type: str, email: str, user_agent: str) -> None:
+    """Log authentication related events."""
+    logger = logging.getLogger('auth')
+    logger.info(f"{event_type} - Email: {email} - User Agent: {user_agent}")
+
 def create_app(data_dir: Path, config: dict):
+    # Setup logging
+    setup_logging(config)
     static_folder = os.path.join(os.path.dirname(__file__), 'static')
     app = Flask(__name__, static_folder=static_folder)
     app.config['DATA_DIR'] = data_dir
@@ -375,6 +408,12 @@ def create_app(data_dir: Path, config: dict):
         base_url = request.url_root.rstrip('/')
         if send_login_email(login_config, email, token, base_url):
             session['token'] = token
+            # Log email sent event
+            log_auth_event(
+                'EMAIL_SENT',
+                email,
+                request.headers.get('User-Agent', 'Unknown')
+            )
             return jsonify({
                 'success': True,
                 'message': 'Login email sent'
@@ -403,11 +442,19 @@ def create_app(data_dir: Path, config: dict):
                     'email': token_data['email']
                 })
             elif token_data['status'] == 'success':
+                email = token_data['email']
                 session['user_info'] = {
-                    'email': token_data['email'],
+                    'email': email,
                 }
                 del email_tokens[token]
                 session.pop('token', None)
+                
+                # Log successful login
+                log_auth_event(
+                    'LOGIN_SUCCESS',
+                    email,
+                    request.headers.get('User-Agent', 'Unknown')
+                )
                 return jsonify({
                     'success': True,
                     'status': token_data['status'],
@@ -494,9 +541,17 @@ def create_app(data_dir: Path, config: dict):
         token_data = login_tokens[token]
         if token_data['status'] == 'success':
             # Store user info in session
-            session['user_info'] = token_data['user_info']
+            user_info = token_data['user_info']
+            session['user_info'] = user_info
             # Clean up token
             del login_tokens[token]
+            
+            # Log successful login
+            log_auth_event(
+                'LOGIN_SUCCESS',
+                user_info.get('email', 'Unknown'),
+                request.headers.get('User-Agent', 'Unknown')
+            )
             return jsonify({
                 'success': True,
                 'user_info': token_data['user_info']
