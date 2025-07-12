@@ -8,75 +8,19 @@ const AUTHOR_KEY = 'linknote_author';
 const LOGIN_CHECK_INTERVAL = 2000; // 2 seconds
 const LOGIN_TIMEOUT = 300000; // 5 minutes
 
-// Function to generate random CAPTCHA text
-function generateCaptchaText() {
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-    let captcha = '';
-    for (let i = 0; i < 6; i++) {
-        captcha += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return captcha;
-}
-
-// Function to draw CAPTCHA on canvas and store in session
+// Function to get CAPTCHA from backend
 async function drawCaptcha() {
-    const canvas = document.getElementById('captchaCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Generate new CAPTCHA text
-    currentCaptcha = generateCaptchaText();
-    
-    // Store CAPTCHA in session
     try {
-        await fetch('/api/captcha/store', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ captcha: currentCaptcha })
-        });
+        const response = await fetch('/api/captcha');
+        const data = await response.json();
+        if (data.success) {
+            const img = document.getElementById('captchaImage');
+            img.src = data.image;
+        } else {
+            console.error('Failed to get CAPTCHA');
+        }
     } catch (error) {
-        console.error('Failed to store CAPTCHA:', error);
-    }
-    
-    // Clear canvas
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add noise
-    for (let i = 0; i < 50; i++) {
-        ctx.fillStyle = '#' + Math.floor(Math.random()*16777215).toString(16);
-        ctx.fillRect(
-            Math.random() * canvas.width,
-            Math.random() * canvas.height,
-            2,
-            2
-        );
-    }
-    
-    // Draw CAPTCHA text
-    ctx.font = 'bold 24px Arial';
-    ctx.fillStyle = '#000000';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Draw each character with random rotation
-    let x = canvas.width / (currentCaptcha.length + 1);
-    for (let i = 0; i < currentCaptcha.length; i++) {
-        ctx.save();
-        ctx.translate(x * (i + 1), canvas.height/2);
-        ctx.rotate((Math.random() - 0.5) * 0.4);
-        ctx.fillText(currentCaptcha[i], 0, 0);
-        ctx.restore();
-    }
-    
-    // Add lines
-    for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
-        ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
-        ctx.strokeStyle = '#' + Math.floor(Math.random()*16777215).toString(16);
-        ctx.stroke();
+        console.error('Failed to get CAPTCHA:', error);
     }
 }
 
@@ -702,14 +646,6 @@ loginBtn.addEventListener('click', () => {
 });
 
 document.getElementById('sendLoginEmail').addEventListener('click', () => {
-    const captchaInput = document.getElementById('captchaInput').value;
-    if (captchaInput.toLowerCase() !== currentCaptcha.toLowerCase()) {
-        loginStatusDiv.textContent = 'Incorrect CAPTCHA. Please try again.';
-        loginStatusDiv.className = 'error';
-        drawCaptcha();
-        document.getElementById('captchaInput').value = '';
-        return;
-    }
     requestEmailLogin();
 });
 

@@ -4,6 +4,9 @@ import uuid
 import secrets
 import smtplib
 import time
+import io
+import base64
+from captcha.image import ImageCaptcha
 from datetime import datetime
 from pathlib import Path
 from functools import wraps
@@ -272,18 +275,28 @@ def create_app(data_dir: Path, config: dict):
                 'error': str(e)
             }), 500
 
-    @app.route('/api/captcha/store', methods=['POST'])
-    def store_captcha():
-        """Store CAPTCHA in session."""
-        captcha = request.json.get('captcha')
-        if not captcha:
-            return jsonify({
-                'success': False,
-                'error': 'CAPTCHA is required'
-            }), 400
-            
-        session['captcha'] = captcha
-        return jsonify({'success': True})
+    @app.route('/api/captcha', methods=['GET'])
+    def get_captcha():
+        """Generate and return a new CAPTCHA image."""
+        image = ImageCaptcha(width=280, height=90)
+        
+        # Generate random CAPTCHA text
+        chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+        captcha_text = ''.join(secrets.choice(chars) for _ in range(6))
+        
+        # Store CAPTCHA text in session
+        session['captcha'] = captcha_text
+        
+        # Generate image
+        img_bytes = image.generate(captcha_text)
+        
+        # Convert to base64
+        img_base64 = base64.b64encode(img_bytes.getvalue()).decode()
+        
+        return jsonify({
+            'success': True,
+            'image': f'data:image/png;base64,{img_base64}'
+        })
         
     @app.route('/api/login/verify-captcha', methods=['POST'])
     def verify_captcha():

@@ -111,9 +111,10 @@ h1 {
     margin: 10px 0;
 }
 
-#captchaCanvas {
+#captchaImage {
     border: 1px solid #ddd;
     border-radius: 4px;
+    object-fit: contain;
 }
 
 #refreshCaptcha {
