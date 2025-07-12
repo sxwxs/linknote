@@ -3,6 +3,8 @@ import json
 import uuid
 import secrets
 import smtplib
+import time
+from datetime import datetime
 from pathlib import Path
 from functools import wraps
 from email.mime.text import MIMEText
@@ -14,6 +16,10 @@ from typing import Dict, Optional
 login_tokens: Dict[str, dict] = {}
 # Store email login tokens
 email_tokens: Dict[str, dict] = {}
+
+# Store visitor data
+visitor_data = set()
+last_email_sent = 0
 
 def send_login_email(config: dict, recipient: str, token: str, base_url: str) -> bool:
     """Send login email with token."""
@@ -51,6 +57,37 @@ def send_login_email(config: dict, recipient: str, token: str, base_url: str) ->
     #     print(f"Error sending email: {e}")
     #     return False
 
+def load_visitor_data(config: dict) -> set:
+    """Load visitor data from file if it exists."""
+    if not config.get('visitor_report', {}).get('enabled'):
+        return set()
+    
+    log_file = Path(config['visitor_report']['log_file'])
+    if not log_file.exists():
+        return set()
+    
+    try:
+        with open(log_file, 'r') as f:
+            data = json.load(f)
+            return set(tuple(x) for x in data)
+    except:
+        return set()
+
+def save_visitor_data(visitors: set, config: dict):
+    """Save visitor data to file."""
+    if not config.get('visitor_report', {}).get('enabled'):
+        return
+    
+    log_file = Path(config['visitor_report']['log_file'])
+    with open(log_file, 'w') as f:
+        json.dump([list(x) for x in visitors], f)
+
+def get_client_ip():
+    """Get client IP, supporting X-Real-IP header for nginx."""
+    if 'X-Real-IP' in request.headers:
+        return request.headers['X-Real-IP']
+    return request.remote_addr
+
 def create_app(data_dir: Path, config: dict):
     static_folder = os.path.join(os.path.dirname(__file__), 'static')
     app = Flask(__name__, static_folder=static_folder)
@@ -62,6 +99,10 @@ def create_app(data_dir: Path, config: dict):
     if 'email' in config['login']:
         admin_email = config['login']['email'].get('admin_email', '')
         admin_email = admin_email.split(',')
+    # Load initial visitor data
+    global visitor_data
+    visitor_data = load_visitor_data(config)
+
     def login_state():
         """Get the current login state."""
         if 'user_info' in session:
@@ -118,9 +159,73 @@ def create_app(data_dir: Path, config: dict):
         else:
             filepath.write_text(json.dumps(data, indent=2), encoding='utf-8')
 
+    def send_visitor_notification(ip: str, user_agent: str, config: dict):
+        """Send email notification about new visitor."""
+        global last_email_sent
+        current_time = time.time()
+        
+        if current_time - last_email_sent < config['visitor_report']['email_interval']:
+            return
+            
+        admin_email = config['login']['email']['admin_email']
+        base_url = request.url_root.rstrip('/')
+        visitor_url = f"{base_url}/visitors"
+        
+        body = f"""
+        New visitor detected:
+        
+        IP: {ip}
+        User Agent: {user_agent}
+        Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        
+        View all visitors: {visitor_url}
+        """
+        
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['From'] = config['login']['email']['account']
+        msg['To'] = admin_email
+        msg['Subject'] = "New Visitor Alert - LinkNote"
+        
+        try:
+            with smtplib.SMTP_SSL(config['login']['email']['smtp_server'], 
+                                config['login']['email']['smtp_port']) as smtp:
+                smtp.login(config['login']['email']['account'], 
+                         config['login']['email']['password'])
+                smtp.send_message(msg)
+                last_email_sent = current_time
+        except Exception as e:
+            print(f"Error sending visitor notification: {e}")
+
     @app.route('/')
     def index():
+        if config.get('visitor_report', {}).get('enabled'):
+            ip = get_client_ip()
+            ua = request.headers.get('User-Agent', '')
+            visitor = (ip, ua)
+            
+            if visitor not in visitor_data:
+                visitor_data.add(visitor)
+                save_visitor_data(visitor_data, config)
+                send_visitor_notification(ip, ua, config)
+                
         return redirect('/static/index.html')
+
+    @app.route('/visitors')
+    @require_login
+    def view_visitors():
+        """Admin-only page to view visitors."""
+        state = login_state()
+        if not state['is_admin']:
+            return jsonify({
+                'success': False,
+                'error': 'Admin access required'
+            }), 403
+            
+        visitor_list = [{'ip': v[0], 'ua': v[1]} for v in visitor_data]
+        return jsonify({
+            'success': True,
+            'visitors': visitor_list
+        })
     
     @app.route('/api/login/state', methods=['GET'])
     def login_state_endpoint():
@@ -167,6 +272,37 @@ def create_app(data_dir: Path, config: dict):
                 'error': str(e)
             }), 500
 
+    @app.route('/api/captcha/store', methods=['POST'])
+    def store_captcha():
+        """Store CAPTCHA in session."""
+        captcha = request.json.get('captcha')
+        if not captcha:
+            return jsonify({
+                'success': False,
+                'error': 'CAPTCHA is required'
+            }), 400
+            
+        session['captcha'] = captcha
+        return jsonify({'success': True})
+        
+    @app.route('/api/login/verify-captcha', methods=['POST'])
+    def verify_captcha():
+        """Verify the CAPTCHA value."""
+        captcha = request.json.get('captcha')
+        if not captcha:
+            return jsonify({
+                'success': False,
+                'error': 'CAPTCHA is required'
+            }), 400
+        
+        if captcha.lower() == session.get('captcha', '').lower():
+            return jsonify({'success': True})
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid CAPTCHA'
+            }), 400
+            
     @app.route('/api/login/type', methods=['GET'])
     def get_login_type():
         """Get the configured login type."""
@@ -201,10 +337,18 @@ def create_app(data_dir: Path, config: dict):
             }), 400
 
         email = request.json.get('email')
+        captcha = request.json.get('captcha')
+        
         if not email:
             return jsonify({
                 'success': False,
                 'error': 'Email is required'
+            }), 400
+            
+        if not captcha or captcha.lower() != session.get('captcha', '').lower():
+            return jsonify({
+                'success': False,
+                'error': 'Invalid CAPTCHA'
             }), 400
 
         # Generate token

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Visitors Report - LinkNote</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .visitor-list {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        .visitor-list th, .visitor-list td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        .visitor-list th {
+            background-color: #f5f5f5;
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            margin: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Visitors Report</h1>
+        <div id="error" class="error-message"></div>
+        <table class="visitor-list">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>User Agent</th>
+                </tr>
+            </thead>
+            <tbody id="visitorList">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Check login state first
+        fetch('/api/login/state')
+            .then(response => response.json())
+            .then(state => {
+                if (!state.logged_in || !state.is_admin) {
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+                loadVisitors();
+            });
+
+        function loadVisitors() {
+            fetch('/visitors')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        document.getElementById('error').textContent = data.error;
+                        document.getElementById('error').style.display = 'block';
+                        return;
+                    }
+
+                    const tbody = document.getElementById('visitorList');
+                    tbody.innerHTML = '';
+                    
+                    data.visitors.forEach(visitor => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${escapeHtml(visitor.ip)}</td>
+                            <td>${escapeHtml(visitor.ua)}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    document.getElementById('error').textContent = 'Error loading visitors data';
+                    document.getElementById('error').style.display = 'block';
+                });
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

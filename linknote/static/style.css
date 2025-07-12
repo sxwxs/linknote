@@ -97,9 +97,41 @@ h1 {
     font-size: 16px;
 }
 
-#emailLogin input[type="email"]:focus {
+#emailLogin input[type="email"]:focus,
+#captchaInput:focus {
     outline: none;
     border-color: #3498db;
+}
+
+#captchaContainer {
+    width: 100%;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+#captchaCanvas {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+#refreshCaptcha {
+    padding: 8px;
+    min-width: 40px;
+    height: 40px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#captchaInput {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
 }
 
 #sendLoginEmail {
