@@ -30,7 +30,6 @@ def send_login_email(config: dict, recipient: str, token: str, base_url: str) ->
     """Send login email with token."""
     # try:
     if True:
-        print(config)
         email_config = config['email']
         login_url = f"{base_url}/api/login/email/verify?token={token}"
         body = f"""
@@ -232,8 +231,9 @@ def create_app(data_dir: Path, config: dict):
         except Exception as e:
             print(f"Error sending visitor notification: {e}")
 
-    @app.route('/')
-    def index():
+    # before process request
+    @app.before_request
+    def visReportLogger():
         if config.get('visitor_report', {}).get('enabled'):
             ip = get_client_ip()
             ua = request.headers.get('User-Agent', '')
@@ -243,7 +243,9 @@ def create_app(data_dir: Path, config: dict):
                 visitor_data.add(visitor)
                 save_visitor_data(visitor_data, config)
                 send_visitor_notification(ip, ua, config)
-                
+
+    @app.route('/')
+    def index():
         return redirect('/static/index.html')
 
     @app.route('/visitors')
