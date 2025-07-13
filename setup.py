@@ -10,6 +10,7 @@ setup(
         'click>=7.0',
         'PyYAML>=6.0',
         'qrcode>=7.0',
+        'captcha>=0.6.0',
     ],
     entry_points={
         'console_scripts': [
