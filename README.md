@@ -101,6 +101,10 @@ Description field supports basic markdown:
 - Italic: `*text*`
 - Code: `` `code` ``
 
+## Deployment in Public Networks
+
+**Warning:** This application has an experimental authentication feature that is not recommended for production use. For public-facing deployments, it is strongly recommended to use a reverse proxy with a robust authentication mechanism, such as HTTP Basic Authentication provided by servers like Nginx. This ensures that your LinkNote instance is secure.
+
 ## Development
 
 ### Project Structure
