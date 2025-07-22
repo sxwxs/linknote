@@ -131,6 +131,7 @@ def create_app(data_dir: Path, config: dict):
     app.config['LOGIN_CONFIG'] = config['login']
     app.secret_key = config['server']['secret_key']
     private = config['login'].get('private', False)
+    admin_email = []
     if 'email' in config['login']:
         admin_email = config['login']['email'].get('admin_email', '')
         admin_email = admin_email.split(',')
@@ -290,6 +291,11 @@ def create_app(data_dir: Path, config: dict):
                     'success': False,
                     'error': 'Authentication required'
                 }), 401
+            if admin_email and not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
         filepath = Path(request.args.get('file', ''))
         if not filepath.is_absolute():
             filepath = app.config['DATA_DIR'] / 'data.js'
@@ -316,11 +322,12 @@ def create_app(data_dir: Path, config: dict):
         image = ImageCaptcha(width=280, height=90)
         
         # Generate random CAPTCHA text
-        chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+        chars = '23456789ABCDEFGHIJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
         captcha_text = ''.join(secrets.choice(chars) for _ in range(6))
         
         # Store CAPTCHA text in session
         session['captcha'] = captcha_text
+        session['captcha_time'] = time.time()
         
         # Generate image
         img_bytes = image.generate(captcha_text)
@@ -392,13 +399,19 @@ def create_app(data_dir: Path, config: dict):
                 'success': False,
                 'error': 'Email is required'
             }), 400
-            
+        # check time out
+        if time.time() - captcha.get('captcha_time', 0) > 300:  # 5 minutes timeout
+            return jsonify({
+                'success': False,
+                'error': 'CAPTCHA expired'
+            }), 400
         if not captcha or captcha.lower() != session.get('captcha', '').lower():
             return jsonify({
                 'success': False,
                 'error': 'Invalid CAPTCHA'
             }), 400
-
+        session['captcha'] = None  # Clear CAPTCHA after use
+        session['captcha_time'] = 0
         # Generate token
         token = secrets.token_urlsafe(32)
         email_tokens[token] = {
@@ -462,7 +475,6 @@ def create_app(data_dir: Path, config: dict):
                     'status': token_data['status'],
                     'email': token_data['email']
                 })
-        
 
     @app.route('/api/login/email/verify')
     def verify_email_login():
@@ -575,6 +587,11 @@ def create_app(data_dir: Path, config: dict):
                     'success': False,
                     'error': 'Authentication required'
                 }), 401
+            if admin_email and not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
         try:
             data = request.json.get('data', [])
             filepath = Path(request.json.get('filepath', ''))
