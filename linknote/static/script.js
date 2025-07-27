@@ -1,9 +1,12 @@
 // State management
-let notes = [];
+let notes = {};
 let displayNotes = [];
 let currentNote = null;
 let loginCheckInterval = null;
 let currentCaptcha = '';
+let currentFile = 'data.js';
+let currentNoteIndex = null;
+let availableFiles = [];
 const AUTHOR_KEY = 'linknote_author';
 const LOGIN_CHECK_INTERVAL = 2000; // 2 seconds
 const LOGIN_TIMEOUT = 300000; // 5 minutes
@@ -43,13 +46,19 @@ const logoutBtn = document.getElementById('logoutBtn');
 const userInfoDiv = document.getElementById('userInfo');
 const usernameSpan = document.getElementById('username');
 const loginStatusDiv = document.getElementById('loginStatus');
-const saveLocationSelect = document.getElementById('saveLocation');
-const customPathInput = document.getElementById('customPath');
-const fileTypeSelect = document.getElementById('fileType');
 const sortBySelect = document.getElementById('sortBy');
 const duplicateButton = document.getElementById('duplicate');
 const isTemplateUrlCheckbox = document.getElementById('isTemplateUrl');
 const templateParamsDiv = document.getElementById('templateParams');
+const manageFilesBtn = document.getElementById('manageFiles');
+const fileManagementDialog = document.getElementById('fileManagementDialog');
+const moveNoteDialog = document.getElementById('moveNoteDialog');
+const createFileDialog = document.getElementById('createFileDialog');
+const targetFileSelect = document.getElementById('targetFile');
+const editStackEditBtn = document.getElementById('editStackEdit');
+const moveNoteBtn = document.getElementById('moveNote');
+const uploadFileBtn = document.getElementById('uploadFile');
+const fileInput = document.getElementById('fileInput');
 
 // Initialize marked for markdown rendering
 const marked = (text) => {
@@ -72,12 +81,11 @@ document.getElementById('saveAll').addEventListener('click', saveNotes);
 document.getElementById('saveNote').addEventListener('click', saveNote);
 document.getElementById('cancelEdit').addEventListener('click', closeEditDialog);
 duplicateButton.addEventListener('click', duplicateNote);
-
-saveLocationSelect.addEventListener('change', () => {
-    const isCustom = saveLocationSelect.value === 'custom';
-    customPathInput.style.display = isCustom ? 'block' : 'none';
-    fileTypeSelect.style.display = isCustom ? 'block' : 'none';
-});
+manageFilesBtn.addEventListener('click', openFileManagement);
+editStackEditBtn.addEventListener('click', openStackEdit);
+moveNoteBtn.addEventListener('click', openMoveNoteDialog);
+uploadFileBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', uploadFiles);
 
 searchInput.addEventListener('input', debounce(filterNotes, 300));
 sortBySelect.addEventListener('change', () => renderNotes());
@@ -103,22 +111,24 @@ async function loadNotes() {
         notes = window.data || [];
         renderNotes();
     } else {
-        try {
-            const response = await fetch('/api/notes');
-            const result = await response.json();
-            if (result.success) {
-                notes = result.data;
-                renderNotes();
-            }
-        } catch (error) {
-            console.error('Failed to load notes:', error);
+        for (let f of availableFiles) {
+            loadNotesFromFile(f.name);
         }
     }
 }
 
 function renderNotes(filtered = null) {
-    displayNotes = filtered || [...notes];
-    
+    if (filtered)
+        displayNotes = filtered
+    else {
+        displayNotes = []
+        for (let key in notes) {
+            if (notes.hasOwnProperty(key)) {
+                displayNotes = displayNotes.concat(notes[key]);
+            }
+        }
+    }
+
     // Sort notes
     const sortBy = sortBySelect.value;
     displayNotes.sort((a, b) => {
@@ -136,7 +146,7 @@ function renderNotes(filtered = null) {
     notesList.innerHTML = displayNotes.map((note, index) => {
         const createDate = new Date(note.createTime);
         const modifyDate = new Date(note.modifyTime);
-        
+
         let linkHtml = '';
         if (note.isTemplateUrl) {
             linkHtml = `
@@ -217,36 +227,42 @@ function filterNotes() {
     if (currentTerm) {
         terms.push(currentTerm.trim().toLowerCase());
     }
+    let filtered = []
+    for (let key in notes) {
+        const currentFiltered = notes[key].filter(note => {
+            const title = note.title.toLowerCase();
+            const desc = note.description.toLowerCase();
+            const tags = note.tags.map(t => t.toLowerCase());
+            const author = (note.author || '').toLowerCase();
 
-    const filtered = notes.filter(note => {
-        const title = note.title.toLowerCase();
-        const desc = note.description.toLowerCase();
-        const tags = note.tags.map(t => t.toLowerCase());
-        const author = (note.author || '').toLowerCase();
-
-        return terms.every(term => {
-            return title.includes(term) ||
-                   desc.includes(term) ||
-                   tags.some(tag => tag.includes(term)) ||
-                   author.includes(term);
+            return terms.every(term => {
+                return title.includes(term) ||
+                       desc.includes(term) ||
+                       tags.some(tag => tag.includes(term)) ||
+                       author.includes(term);
+            });
         });
-    });
-
+    }
     renderNotes(filtered);
 }
 
 function openEditDialog(note = null) {
     currentNote = note;
+    currentNoteIndex = note ? notes[currentFile].indexOf(note) : null;
     document.getElementById('editTitle').value = note ? note.title : '';
     document.getElementById('editLink').value = note ? note.link : '';
     document.getElementById('editTags').value = note ? note.tags.join(', ') : '';
     document.getElementById('editDescription').value = note ? note.description : '';
     document.getElementById('editAuthor').value = note ? note.author : localStorage.getItem(AUTHOR_KEY) || '';
-    
+    document.getElementById('targetFile').value = note && note.file ? note.file : 'data.js';
+    // make it readonly
+    document.getElementById('targetFile').disabled = !!note;
     isTemplateUrlCheckbox.checked = note ? note.isTemplateUrl : false;
     updateTemplateParams();
-    
+
     duplicateButton.style.display = note ? 'block' : 'none';
+    editStackEditBtn.style.display = note ? 'block' : 'none';
+    moveNoteBtn.style.display = note ? 'block' : 'none';
     editDialog.classList.add('active');
 }
 
@@ -266,7 +282,7 @@ function duplicateNote() {
     newNote.createTime = Date.now();
     newNote.modifyTime = Date.now();
     newNote.title = `${newNote.title} copy`;
-    notes.push(newNote);
+    notes[currentFile].push(newNote);
     closeEditDialog();
     renderNotes();
 }
@@ -277,13 +293,13 @@ function duplicateNoteAt(index) {
     newNote.createTime = Date.now();
     newNote.modifyTime = Date.now();
     newNote.title = `${newNote.title} copy`;
-    notes.push(newNote);
+    notes[currentFile].push(newNote);
     renderNotes();
 }
 
 function deleteNote(index) {
     if (confirm('Are you sure you want to delete this note?')) {
-        notes.splice(index, 1);
+        notes[currentFile].splice(index, 1);
         renderNotes();
     }
 }
@@ -296,7 +312,7 @@ function updateTemplateParams() {
 
     const link = document.getElementById('editLink').value;
     const params = extractUrlParams(link);
-    
+
     if (params.length === 0) {
         templateParamsDiv.innerHTML = '<p>No parameters found. Use {paramName} in URL to define parameters.</p>';
         return;
@@ -376,9 +392,9 @@ async function saveNote() {
     const description = document.getElementById('editDescription').value.trim();
     const author = document.getElementById('editAuthor').value.trim();
     const isTemplateUrl = isTemplateUrlCheckbox.checked;
-
-    if (!title || !link) {
-        alert('Title and link are required!');
+    const targetFile = targetFileSelect.value;
+    if (!title) {
+        alert('Title is required!');
         return;
     }
 
@@ -397,12 +413,12 @@ async function saveNote() {
         createTime: currentNote ? currentNote.createTime : Date.now(),
         modifyTime: Date.now()
     };
-    
+
     if (currentNote) {
-        const index = notes.indexOf(currentNote);
-        notes[index] = note;
+        const index = notes[currentFile].indexOf(currentNote);
+        notes[currentFile][index] = note;
     } else {
-        notes.push(note);
+        notes[targetFile].push(note);
     }
 
     closeEditDialog();
@@ -411,23 +427,32 @@ async function saveNote() {
 }
 
 async function saveNotes() {
-    const isCustom = saveLocationSelect.value === 'custom';
-    const filepath = isCustom ? customPathInput.value : '';
-    
+    const targetFile = targetFileSelect.value;
+
     if (window.location.protocol === 'file:') {
         console.warn('Cannot save in static mode');
         return;
     }
 
     try {
+        let notesToSave = []
+        for (let n of notes[targetFile]) {
+            let newNote = {}
+            for (let k in n) {
+                if (k === 'file' || k === 'index') continue; // Skip file and index
+                newNote[k] = n[k];
+            }
+            notesToSave.push(newNote);
+        }
         const response = await fetch('/api/notes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: notes, filepath })
+            body: JSON.stringify({ data: notesToSave, filepath: targetFile })
         });
-        
+
         const result = await response.json();
         if (result.success) {
+            currentFile = targetFile;
             alert('Notes saved successfully!');
         } else {
             throw new Error(result.error);
@@ -468,7 +493,7 @@ async function requestLogin() {
         // Get login type first
         const typeResponse = await fetch('/api/login/type');
         const typeResult = await typeResponse.json();
-        
+
         if (!typeResult.success) {
             throw new Error(typeResult.error);
         }
@@ -483,16 +508,16 @@ async function requestLogin() {
         if (loginType === 'oauth') {
             loginStatusDiv.textContent = 'Generating login QR code...';
             loginStatusDiv.className = '';
-            
+
             const response = await fetch('/api/login/request', {
                 method: 'POST'
             });
             const result = await response.json();
-            
+
             if (!result.success) {
                 throw new Error(result.error);
             }
-            
+
             // Generate QR Code
             const qrCodeDiv = document.getElementById('qrCode');
             qrCodeDiv.innerHTML = '';
@@ -500,7 +525,7 @@ async function requestLogin() {
                 width: 256,
                 margin: 2
             });
-            
+
             // Start checking login status
             startLoginCheck();
         }
@@ -550,7 +575,7 @@ function startLoginCheck() {
     let startTime = Date.now();
     loginStatusDiv.textContent = 'Waiting for login...';
     loginStatusDiv.className = '';
-    
+
     loginCheckInterval = setInterval(async () => {
         try {
             // Check timeout
@@ -560,7 +585,7 @@ function startLoginCheck() {
                 loginStatusDiv.className = 'error';
                 return;
             }
-            
+
             let response;
             if (loginType === 'email') {
                 response = await fetch('/api/login/email/status');
@@ -568,7 +593,7 @@ function startLoginCheck() {
                 response = await fetch('/api/login/check');
             }
             const result = await response.json();
-            
+
             if (result.success) {
                 clearInterval(loginCheckInterval);
                 userInfo = result.user_info || { email: result.email };
@@ -696,27 +721,53 @@ async function checkLoginState() {
 function updateActionButtons() {
     const newNoteBtn = document.getElementById('newNote');
     const saveAllBtn = document.getElementById('saveAll');
-    
+    const manageFilesBtn = document.getElementById('manageFiles');
+
     if (isPrivateSite && !isLoggedIn) {
         newNoteBtn.style.display = 'none';
         saveAllBtn.style.display = 'none';
+        manageFilesBtn.style.display = 'none';
         return;
     }
-    
+
     if (isPrivateSite && !isAdmin) {
         newNoteBtn.style.display = 'none';
         saveAllBtn.style.display = 'none';
+        manageFilesBtn.style.display = 'none';
         return;
     }
-    
+
     newNoteBtn.style.display = 'block';
     saveAllBtn.style.display = 'block';
+    manageFilesBtn.style.display = 'block';
 }
 
 // Initialize
 window.addEventListener('load', async () => {
+    // Check if we're in public mode
+    if (window.isPublicMode) {
+        // Hide login elements and admin features for public mode
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('newNote').style.display = 'none';
+        // document.getElementById('saveAll').style.display = 'none';
+        document.getElementById('manageFiles').style.display = 'none';
+        currentFile = 'public.js';
+        await loadNotes();
+        //return;
+    }
     await checkLoginType();
     await checkLoginState();
+    if (isPrivateSite && !isAdmin) {
+        availableFiles = [{
+            'name': 'public.js',
+            'is_public': true,
+            'size': 0
+        }];
+        await loadNotes();
+    }
+    else
+        await loadAvailableFiles(); // Load available files on startup
     if (!isPrivateSite || isLoggedIn) {
         await loadNotes();
     }
@@ -759,3 +810,337 @@ duplicateNoteAt = (index) => {
         originalDuplicateNoteAt(index);
     }
 };
+
+// File Management Functions
+async function loadAvailableFiles() {
+    try {
+        const response = await fetch('/api/data-files');
+        const result = await response.json();
+        if (result.success) {
+            availableFiles = result.files;
+            updateFileSelects();
+        }
+    } catch (error) {
+        console.error('Failed to load available files:', error);
+    }
+}
+
+function updateFileSelects() {
+    const selects = [targetFileSelect, document.getElementById('moveTargetFile')];
+    selects.forEach(select => {
+        if (select) {
+            select.innerHTML = availableFiles.map(file => 
+                `<option value="${file.name}">${file.name}${file.is_public ? ' (Public)' : ''}</option>`
+            ).join('');
+        }
+    });
+}
+
+async function openFileManagement() {
+    await loadUploadedFiles();
+    await loadAvailableFiles();
+    fileManagementDialog.classList.add('active');
+}
+
+function closeFileManagement() {
+    fileManagementDialog.classList.remove('active');
+}
+
+async function loadUploadedFiles() {
+    try {
+        const response = await fetch('/api/files');
+        const result = await response.json();
+        if (result.success) {
+            displayUploadedFiles(result.files);
+        }
+    } catch (error) {
+        console.error('Failed to load uploaded files:', error);
+    }
+}
+
+function displayUploadedFiles(files) {
+    const container = document.getElementById('uploadedFilesList');
+    container.innerHTML = files.map(file => `
+        <div class="file-item">
+            <div class="file-info">
+                <strong>${escapeHtml(file.original_filename)}</strong>
+                <div class="file-meta">
+                    Size: ${formatFileSize(file.size)} | 
+                    Type: ${file.mimetype} | 
+                    Uploaded: ${new Date(file.upload_time * 1000).toLocaleString()}
+                </div>
+                <div class="file-url">
+                    <input type="text" value="${window.location.origin}${file.url}" readonly>
+                    <button onclick="copyToClipboard('${window.location.origin}${file.url}')">Copy URL</button>
+                </div>
+            </div>
+            <div class="file-actions">
+                <button onclick="window.open('${file.url}', '_blank')">View</button>
+                <button onclick="deleteUploadedFile('${file.id}')">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function displayDataFiles(files) {
+    const container = document.getElementById('dataFilesList');
+    container.innerHTML = files.map(file => `
+        <div class="file-item">
+            <div class="file-info">
+                <strong>${escapeHtml(file.name)}</strong>
+                ${file.is_public ? '<span class="public-badge">Public</span>' : ''}
+                <div class="file-meta">Size: ${formatFileSize(file.size)}</div>
+            </div>
+            <div class="file-actions">
+                <button onclick="loadNotesFromFile('${file.name}')">Load</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function uploadFiles() {
+    const files = fileInput.files;
+    if (files.length === 0) return;
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert(`File "${file.name}" uploaded successfully!`);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            alert(`Failed to upload "${file.name}": ${error.message}`);
+        }
+    }
+
+    fileInput.value = '';
+    await loadUploadedFiles();
+}
+
+async function deleteUploadedFile(fileId) {
+    if (!confirm('Are you sure you want to delete this file?')) return;
+
+    try {
+        const response = await fetch(`/api/files/${fileId}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert('File deleted successfully!');
+            await loadUploadedFiles();
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        alert(`Failed to delete file: ${error.message}`);
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('URL copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy URL:', err);
+    });
+}
+
+async function createNewFile() {
+    const filename = document.getElementById('createFileName').value.trim();
+    if (!filename) {
+        alert('Please enter a filename');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/data-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename })
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert(`File "${result.filename}" created successfully!`);
+            createFileDialog.classList.remove('active');
+            document.getElementById('createFileName').value = '';
+            await loadAvailableFiles();
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        alert(`Failed to create file: ${error.message}`);
+    }
+}
+
+async function loadNotesFromFile(filename) {
+    currentFile = filename;
+    try {
+        const response = await fetch(`/api/notes?file=${encodeURIComponent(filename)}`);
+        const result = await response.json();
+        if (result.success) {
+            let data = result.data
+            let index = 0;
+            for (let n of data) {
+                n.file = filename; // Update file reference for existing notes
+                n.index = index
+                ++index
+            }
+            notes[filename] = data
+            renderNotes();
+            closeFileManagement();
+            console.log(`Loaded notes from ${filename}`);
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        alert(`Failed to load notes from ${filename}: ${error.message}`);
+    }
+}
+
+// StackEdit Integration
+function openStackEdit() {
+    const el = document.getElementById('editDescription');
+    const stackedit = new Stackedit();
+    // Open the iframe
+    stackedit.openFile({
+        name: 'Filename', // with an optional filename
+        content: {
+            text: el.value // and the Markdown content.
+        }
+    });
+
+    // Listen to StackEdit events and apply the changes to the textarea.
+    stackedit.on('fileChange', (file) => {
+        el.value = file.content.text;
+    });
+}
+
+// Move Note Functions
+function openMoveNoteDialog() {
+    if (!currentNote || currentNoteIndex === null) return;
+
+    // Update target file options
+    updateFileSelects();
+    moveNoteDialog.classList.add('active');
+}
+
+function closeMoveNoteDialog() {
+    moveNoteDialog.classList.remove('active');
+}
+
+async function moveNoteToFile() {
+    const targetFile = document.getElementById('moveTargetFile').value;
+    if (!targetFile || targetFile === currentFile) {
+        alert('Please select a different target file');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/notes/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_file: currentFile,
+                target_file: targetFile,
+                note_index: currentNoteIndex
+            })
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert(`Note moved to ${targetFile} successfully!`);
+            closeMoveNoteDialog();
+            closeEditDialog();
+            await loadNotes(); // Reload current file
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        alert(`Failed to move note: ${error.message}`);
+    }
+}
+
+// Update editNote function to pass index
+function editNote(index) {
+    const note = displayNotes[index];
+    currentNoteIndex = notes[currentFile].indexOf(note);
+    openEditDialog(note);
+}
+
+// File Management Event Listeners
+document.getElementById('closeFileManagement').addEventListener('click', closeFileManagement);
+document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('uploadInput').click());
+document.getElementById('uploadInput').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            alert(`Failed to upload ${file.name}: ${error.message}`);
+        }
+    }
+    e.target.value = '';
+    await loadUploadedFiles();
+});
+
+document.getElementById('createFileBtn').addEventListener('click', createNewFile);
+document.getElementById('confirmCreateFile').addEventListener('click', createNewFile);
+document.getElementById('cancelCreateFile').addEventListener('click', () => {
+    createFileDialog.classList.remove('active');
+});
+document.getElementById('createNewFile').addEventListener('click', () => {
+    createFileDialog.classList.add('active');
+});
+
+document.getElementById('confirmMoveNote').addEventListener('click', moveNoteToFile);
+document.getElementById('cancelMoveNote').addEventListener('click', closeMoveNoteDialog);
+
+// Tab switching for file management
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+
+        // Update active tab button
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update active tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tab}FilesTab`).classList.add('active');
+
+        // Load appropriate content
+        if (tab === 'uploaded') {
+            loadUploadedFiles();
+        } else if (tab === 'data') {
+            loadAvailableFiles().then(() => {
+                displayDataFiles(availableFiles);
+            });
+        }
+    });
+});

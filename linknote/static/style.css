@@ -383,3 +383,170 @@ button:hover {
 #customPath {
     margin-top: 10px;
 }
+
+/* File Management Dialog Styles */
+.file-tabs {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 10px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    cursor: pointer;
+}
+
+.tab-btn.active {
+    background: white;
+    border-top: 2px solid #3498db;
+}
+
+.tab-content {
+    display: none;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 0 0 4px 4px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.upload-section, .create-file-section {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.upload-section input[type="file"] {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.create-file-section input {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    background: white;
+}
+
+.file-info {
+    flex: 1;
+}
+
+.file-info strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #2c3e50;
+}
+
+.file-meta {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.file-url {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.file-url input {
+    flex: 1;
+    font-size: 12px;
+    padding: 4px;
+    margin-bottom: 0;
+    background: #f8f9fa;
+}
+
+.file-url button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.file-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.file-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.public-badge {
+    background: #2ecc71;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-left: 8px;
+}
+
+/* File Management Section */
+#fileManagement {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#fileManagement label {
+    margin-bottom: 0;
+}
+
+#fileManagement select {
+    flex: 1;
+    min-width: 150px;
+    margin-bottom: 0;
+}
+
+#fileManagement button {
+    white-space: nowrap;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .actions {
+        justify-content: center;
+    }
+    
+    .file-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .file-actions {
+        justify-content: center;
+    }
+    
+    #fileManagement {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .dialog-content {
+        width: 95%;
+        padding: 20px;
+    }
+}

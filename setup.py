@@ -10,6 +10,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'flask>=2.0.0',
+        'werkzeug>=2.0.0',
         'click>=7.0',
         'PyYAML>=6.0',
         'qrcode>=7.0',
@@ -17,7 +18,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'linknote=linknote.cli:main',
+            'linknote=linknote.__main__:main',
         ],
     },
     package_data={

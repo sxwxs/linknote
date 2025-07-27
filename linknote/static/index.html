@@ -18,6 +18,7 @@
                 <div class="actions">
                     <button id="newNote">New Note</button>
                     <button id="saveAll">Save All</button>
+                    <button id="manageFiles">Manage Files</button>
                 </div>
                 <div class="sort-options">
                     <label>Sort by:</label>
@@ -59,21 +60,20 @@
                     <textarea id="editDescription" placeholder="Description (markdown supported)"></textarea>
                     
                     <div class="save-options">
-                        <label>Save to:</label>
-                        <select id="saveLocation">
-                            <option value="default">Default Location (data.js)</option>
-                            <option value="custom">Custom Location...</option>
-                        </select>
-                        <input type="text" id="customPath" placeholder="Custom file path" style="display: none;">
-                        <select id="fileType" style="display: none;">
-                            <option value=".js">JavaScript (.js)</option>
-                            <option value=".json">JSON (.json)</option>
-                        </select>
+                        <div id="fileManagement" style="margin-top: 10px;">
+                            <label>File:</label>
+                            <select id="targetFile"></select>
+                            <button type="button" id="createNewFile">Create New File</button>
+                        </div>
                     </div>
 
                     <div class="dialog-buttons">
                         <button id="saveNote">Save</button>
+                        <button id="editStackEdit" style="display: none;">Edit in StackEdit</button>
                         <button id="duplicate" style="display: none;">Duplicate</button>
+                        <button id="moveNote" style="display: none;">Move to Different File</button>
+                        <button id="uploadFile">Upload File</button>
+                        <input type="file" id="fileInput" style="display: none;" multiple>
                         <button id="cancelEdit">Cancel</button>
                     </div>
                 </div>
@@ -107,6 +107,61 @@
         </div>
     </div>
 
+    <!-- File Management Dialog -->
+    <div id="fileManagementDialog" class="dialog">
+        <div class="dialog-content">
+            <h2>Manage Files</h2>
+            <div class="file-tabs">
+                <button class="tab-btn active" data-tab="uploaded">Uploaded Files</button>
+                <button class="tab-btn" data-tab="data">Data Files</button>
+            </div>
+            
+            <div id="uploadedFilesTab" class="tab-content active">
+                <div class="upload-section">
+                    <input type="file" id="uploadInput" multiple>
+                    <button id="uploadBtn">Upload Files</button>
+                </div>
+                <div id="uploadedFilesList"></div>
+            </div>
+            
+            <div id="dataFilesTab" class="tab-content">
+                <div class="create-file-section">
+                    <input type="text" id="newFileName" placeholder="Enter filename (e.g., notes.js)">
+                    <button id="createFileBtn">Create File</button>
+                </div>
+                <div id="dataFilesList"></div>
+            </div>
+            
+            <div class="dialog-buttons">
+                <button id="closeFileManagement">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Move Note Dialog -->
+    <div id="moveNoteDialog" class="dialog">
+        <div class="dialog-content">
+            <h2>Move Note to Different File</h2>
+            <p>Select target file:</p>
+            <select id="moveTargetFile"></select>
+            <div class="dialog-buttons">
+                <button id="confirmMoveNote">Move</button>
+                <button id="cancelMoveNote">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create New File Dialog -->
+    <div id="createFileDialog" class="dialog">
+        <div class="dialog-content">
+            <h2>Create New File</h2>
+            <input type="text" id="createFileName" placeholder="Enter filename (e.g., personal.js)">
+            <div class="dialog-buttons">
+                <button id="confirmCreateFile">Create</button>
+                <button id="cancelCreateFile">Cancel</button>
+            </div>
+        </div>
+
     <!-- Load data.js if in static mode -->
     <script>
         // Check if we're running in static mode (not served by Flask)
@@ -117,5 +172,6 @@
         }
     </script>
     <script src="script.js"></script>
+    <script src="https://unpkg.com/stackedit-js@1.0.7/docs/lib/stackedit.min.js"></script>
 </body>
 </html>

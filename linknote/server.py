@@ -14,8 +14,10 @@ from pathlib import Path
 from functools import wraps
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from flask import Flask, request, jsonify, redirect, session, Response, url_for
+from flask import Flask, request, jsonify, redirect, session, Response, url_for, send_file
+from werkzeug.utils import secure_filename
 from typing import Dict, Optional
+import mimetypes
 
 # Store login tokens and their states
 login_tokens: Dict[str, dict] = {}
@@ -51,7 +53,7 @@ def send_login_email(config: dict, recipient: str, token: str, base_url: str) ->
         print(r)
         smtpObj.sendmail(email_config['account'],[recipient,],msg.as_string()) 
         smtpObj.quit()
-    
+
         # server.starttls()
         # server.login(email_config['account'], email_config['password'])
         # server.send_message(msg)
@@ -65,11 +67,11 @@ def load_visitor_data(config: dict) -> set:
     """Load visitor data from file if it exists."""
     if not config.get('visitor_report', {}).get('enabled'):
         return set()
-    
+
     log_file = Path(config['visitor_report']['log_file'])
     if not log_file.exists():
         return set()
-    
+
     try:
         with open(log_file, 'r') as f:
             data = json.load(f)
@@ -81,7 +83,7 @@ def save_visitor_data(visitors: set, config: dict):
     """Save visitor data to file."""
     if not config.get('visitor_report', {}).get('enabled'):
         return
-    
+
     log_file = Path(config['visitor_report']['log_file'])
     with open(log_file, 'w') as f:
         json.dump([list(x) for x in visitors], f)
@@ -96,22 +98,22 @@ def setup_logging(config: dict) -> None:
     """Setup logging configuration."""
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
-    
+
     log_file = log_dir / 'auth.log'
-    
+
     handler = RotatingFileHandler(
         log_file,
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5
     )
-    
+
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     handler.setFormatter(formatter)
-    
+
     logger = logging.getLogger('auth')
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
@@ -138,6 +140,11 @@ def create_app(data_dir: Path, config: dict):
     # Load initial visitor data
     global visitor_data
     visitor_data = load_visitor_data(config)
+    try:
+        os.mkdir(data_dir)
+    except FileExistsError:
+        pass
+    print(f"Data directory set to: {data_dir}")
 
     def login_state():
         """Get the current login state."""
@@ -152,7 +159,7 @@ def create_app(data_dir: Path, config: dict):
             'is_admin': False,
             'user_info': None
         }
-    
+
     def require_login(f):
         """Decorator to protect routes that require authentication."""
         @wraps(f)
@@ -168,12 +175,12 @@ def create_app(data_dir: Path, config: dict):
                 }), 401
             return f(*args, **kwargs)
         return decorated_function
-    
+
     def check_ip_whitelist(ip: str) -> bool:
         """Check if IP is in the whitelist."""
         whitelist = config['login']['callback']['ip_whitelist']
         return not whitelist or ip in whitelist
-    print(f"Data directory set to: {data_dir}")
+
     def load_data(filepath: Path):
         """Load data from a file (JSON or JS)."""
         if not filepath.exists():
@@ -194,6 +201,17 @@ def create_app(data_dir: Path, config: dict):
             filepath.write_text(content, encoding='utf-8')
         else:
             filepath.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    # if 'data.js' and 'publis.js' not exisit, create empty file
+    public_file = data_dir / 'public.js'
+    if not public_file.exists():
+        save_data([], public_file)
+        print(f"Created public.js at {public_file}")
+    # Create empty data.js if it doesn't exist
+    data_file = data_dir / 'data.js'
+    if not data_file.exists():
+        save_data([], data_file)
+        print(f"Created data.js at {data_file}")
 
     def send_visitor_notification(ip: str, user_agent: str, config: dict):
         """Send email notification about new visitor."""
@@ -265,13 +283,13 @@ def create_app(data_dir: Path, config: dict):
             'success': True,
             'visitors': visitor_list
         })
-    
+
     @app.route('/api/login/state', methods=['GET'])
     def login_state_endpoint():
         """Get the current login state."""
         state = login_state()
         return jsonify(state)
-    
+
     # logout
     @app.route('/api/logout', methods=['GET'])
     def logout():
@@ -284,7 +302,20 @@ def create_app(data_dir: Path, config: dict):
 
     @app.route('/api/notes', methods=['GET'])
     def get_notes():
-        if private:
+        filepath = request.args.get('file', '')
+        dataFiles = os.listdir(app.config['DATA_DIR'])
+        if not filepath or filepath not in dataFiles:
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        filepath = Path(filepath)
+        # Allow public access to public.js file
+        is_public_file = filepath.name == 'public.js'
+        # if not filepath.is_absolute():
+        filepath = app.config['DATA_DIR'] / filepath
+
+        if private and not is_public_file:
             state = login_state()
             if not state['logged_in']:
                 return jsonify({
@@ -296,16 +327,13 @@ def create_app(data_dir: Path, config: dict):
                     'success': False,
                     'error': 'Admin access required'
                 }), 403
-        filepath = Path(request.args.get('file', ''))
-        if not filepath.is_absolute():
-            filepath = app.config['DATA_DIR'] / 'data.js'
         
         try:
             data = load_data(filepath)
             response = jsonify({
                 'success': True,
                 'data': data,
-                'filepath': str(filepath)
+                'filepath': filepath.name
             })
             # Add login enabled state to headers
             response.headers['X-Login-Enabled'] = str(app.config['LOGIN_ENABLED']).lower()
@@ -400,7 +428,7 @@ def create_app(data_dir: Path, config: dict):
                 'error': 'Email is required'
             }), 400
         # check time out
-        if time.time() - captcha.get('captcha_time', 0) > 300:  # 5 minutes timeout
+        if time.time() - session.get('captcha_time', 0) > 300:  # 5 minutes timeout
             return jsonify({
                 'success': False,
                 'error': 'CAPTCHA expired'
@@ -594,18 +622,360 @@ def create_app(data_dir: Path, config: dict):
                 }), 403
         try:
             data = request.json.get('data', [])
-            filepath = Path(request.json.get('filepath', ''))
-            
-            if not filepath.is_absolute():
-                filepath = app.config['DATA_DIR'] / 'data.js'
-                
-            filepath.parent.mkdir(parents=True, exist_ok=True)
+            dataFiles = os.listdir(app.config['DATA_DIR'])
+            filePath = request.json.get('filepath', '')
+            if filePath not in dataFiles:
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            filepath = app.config['DATA_DIR'] / filePath
             save_data(data, filepath)
-            
             return jsonify({
                 'success': True,
                 'filepath': str(filepath)
             })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/upload', methods=['POST'])
+    @require_login
+    def upload_file():
+        """Upload a file and return its ID."""
+        if private and admin_email:
+            state = login_state()
+            if not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+        try:
+            if 'file' not in request.files:
+                return jsonify({
+                    'success': False,
+                    'error': 'No file provided'
+                }), 400
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({
+                    'success': False,
+                    'error': 'No file selected'
+                }), 400
+            # Create uploads directory
+            uploads_dir = app.config['DATA_DIR'] / 'uploads'
+            uploads_dir.mkdir(exist_ok=True)
+            # Generate unique filename with original extension
+            original_filename = secure_filename(file.filename)
+            file_id = str(uuid.uuid4())
+            file_extension = Path(original_filename).suffix
+            filename = f"{file_id}{file_extension}"
+            filepath = uploads_dir / filename
+            # Save file
+            file.save(filepath)
+            # Store file metadata
+            metadata_file = uploads_dir / 'metadata.json'
+            if metadata_file.exists():
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+            metadata[file_id] = {
+                'original_filename': original_filename,
+                'filename': filename,
+                'upload_time': time.time(),
+                'size': filepath.stat().st_size,
+                'mimetype': mimetypes.guess_type(original_filename)[0] or 'application/octet-stream'
+            }
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            return jsonify({
+                'success': True,
+                'file_id': file_id,
+                'original_filename': original_filename,
+                'url': f'/api/files/{file_id}'
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/files/<file_id>')
+    def get_file(file_id):
+        """Get a file by ID."""
+        try:
+            uploads_dir = app.config['DATA_DIR'] / 'uploads'
+            metadata_file = uploads_dir / 'metadata.json'
+            if not metadata_file.exists():
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            if file_id not in metadata:
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            file_info = metadata[file_id]
+            filepath = uploads_dir / file_info['filename']
+            if not filepath.exists():
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found on disk'
+                }), 404
+            return send_file(
+                filepath,
+                mimetype=file_info['mimetype'],
+                as_attachment=False,
+                download_name=file_info['original_filename']
+            )
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/files', methods=['GET'])
+    @require_login
+    def list_files():
+        """List all uploaded files."""
+        if private and admin_email:
+            state = login_state()
+            if not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+        try:
+            uploads_dir = app.config['DATA_DIR'] / 'uploads'
+            metadata_file = uploads_dir / 'metadata.json'
+            if not metadata_file.exists():
+                return jsonify({
+                    'success': True,
+                    'files': []
+                })
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            files = []
+            for file_id, info in metadata.items():
+                files.append({
+                    'id': file_id,
+                    'original_filename': info['original_filename'],
+                    'upload_time': info['upload_time'],
+                    'size': info['size'],
+                    'mimetype': info['mimetype'],
+                    'url': f'/api/files/{file_id}'
+                })
+            # Sort by upload time, newest first
+            files.sort(key=lambda x: x['upload_time'], reverse=True)
+            return jsonify({
+                'success': True,
+                'files': files
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/files/<file_id>', methods=['DELETE'])
+    @require_login
+    def delete_file(file_id):
+        """Delete a file by ID."""
+        if private and admin_email:
+            state = login_state()
+            if not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+        try:
+            uploads_dir = app.config['DATA_DIR'] / 'uploads'
+            metadata_file = uploads_dir / 'metadata.json'
+            if not metadata_file.exists():
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+            if file_id not in metadata:
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            file_info = metadata[file_id]
+            filepath = uploads_dir / file_info['filename']
+            # Delete file from disk
+            if filepath.exists():
+                filepath.unlink()
+            # Remove from metadata
+            del metadata[file_id]
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            return jsonify({
+                'success': True,
+                'message': 'File deleted successfully'
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/data-files', methods=['GET'])
+    def list_data_files():
+        """List all available data files."""
+        if private:
+            state = login_state()
+            if not state['logged_in']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Authentication required'
+                }), 401
+        try:
+            data_dir = app.config['DATA_DIR']
+            files = []
+            # Add built-in public.js
+            public_file = data_dir / 'public.js'
+            if not public_file.exists():
+                # Create public.js if it doesn't exist
+                save_data([], public_file)
+            files.append({
+                'name': 'public.js',
+                # 'path': str(public_file),
+                'is_public': True,
+                'size': public_file.stat().st_size if public_file.exists() else 0
+            })
+            # Find other .js and .json files
+            for pattern in ['*.js', '*.json']:
+                for filepath in data_dir.glob(pattern):
+                    if filepath.name != 'public.js':  # Skip public.js as it's already added
+                        files.append({
+                            'name': filepath.name,
+                            # 'path': str(filepath),
+                            'is_public': False,
+                            'size': filepath.stat().st_size
+                        })
+            return jsonify({
+                'success': True,
+                'files': files
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/data-files', methods=['POST'])
+    @require_login
+    def create_data_file():
+        """Create a new data file."""
+        if private and admin_email:
+            state = login_state()
+            if not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+        try:
+            filename = request.json.get('filename', '').strip()
+            if not filename:
+                return jsonify({
+                    'success': False,
+                    'error': 'Filename is required'
+                }), 400
+            # Ensure proper extension
+            if not filename.endswith(('.js', '.json')):
+                return jsonify({
+                    'success': False,
+                    'error': 'Filename must end with .js or .json'
+                }), 400
+            # Secure the filename
+            filename = secure_filename(filename)
+            filepath = app.config['DATA_DIR'] / filename
+            if filepath.exists():
+                return jsonify({
+                    'success': False,
+                    'error': 'File already exists'
+                }), 400
+            # Create empty file
+            save_data([], filepath)
+            return jsonify({
+                'success': True,
+                'filename': filename,
+                'path': str(filepath)
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/notes/move', methods=['POST'])
+    @require_login
+    def move_note():
+        """Move a note from one file to another."""
+        if private and admin_email:
+            state = login_state()
+            if not state['is_admin']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+        
+        try:
+            source_file = Path(request.json.get('source_file', ''))
+            target_file = Path(request.json.get('target_file', ''))
+            note_index = request.json.get('note_index')
+            
+            if not source_file.is_absolute():
+                source_file = app.config['DATA_DIR'] / source_file
+            if not target_file.is_absolute():
+                target_file = app.config['DATA_DIR'] / target_file
+            
+            if not source_file.exists():
+                return jsonify({
+                    'success': False,
+                    'error': 'Source file not found'
+                }), 404
+            
+            # Load source data
+            source_data = load_data(source_file)
+            
+            if note_index < 0 or note_index >= len(source_data):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid note index'
+                }), 400
+            
+            # Get note to move
+            note = source_data.pop(note_index)
+            
+            # Load target data (create if doesn't exist)
+            if target_file.exists():
+                target_data = load_data(target_file)
+            else:
+                target_data = []
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Add note to target
+            target_data.append(note)
+            
+            # Save both files
+            save_data(source_data, source_file)
+            save_data(target_data, target_file)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Note moved successfully'
+            })
+            
         except Exception as e:
             return jsonify({
                 'success': False,
