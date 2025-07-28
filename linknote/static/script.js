@@ -242,6 +242,7 @@ function filterNotes() {
                        author.includes(term);
             });
         });
+        filtered = filtered.concat(currentFiltered)
     }
     renderNotes(filtered);
 }
