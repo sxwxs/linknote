@@ -86,7 +86,7 @@ def save_visitor_data(visitors: set, config: dict):
 
     log_file = Path(config['visitor_report']['log_file'])
     with open(log_file, 'w') as f:
-        json.dump([list(x) for x in visitors], f)
+        json.dump([list(x) for x in visitors], f, ensure_ascii=False)
 
 def get_client_ip():
     """Get client IP, supporting X-Real-IP header for nginx."""
@@ -197,10 +197,10 @@ def create_app(data_dir: Path, config: dict):
     def save_data(data, filepath: Path):
         """Save data to a file (JSON or JS)."""
         if filepath.suffix == '.js':
-            content = f"var data = {json.dumps(data, indent=2)};"
+            content = f"var data = {json.dumps(data, indent=2, ensure_ascii=False)};"
             filepath.write_text(content, encoding='utf-8')
         else:
-            filepath.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
 
     # if 'data.js' and 'publis.js' not exisit, create empty file
     public_file = data_dir / 'public.js'
@@ -690,7 +690,7 @@ def create_app(data_dir: Path, config: dict):
                 'mimetype': mimetypes.guess_type(original_filename)[0] or 'application/octet-stream'
             }
             with open(metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
             return jsonify({
                 'success': True,
                 'file_id': file_id,
@@ -817,7 +817,7 @@ def create_app(data_dir: Path, config: dict):
             # Remove from metadata
             del metadata[file_id]
             with open(metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
             return jsonify({
                 'success': True,
                 'message': 'File deleted successfully'
