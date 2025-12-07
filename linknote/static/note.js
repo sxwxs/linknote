@@ -406,7 +406,6 @@ async function saveNotes(targetFile) {
             await saveNotes(file);
         }
     }
-        
 
     if (window.location.protocol === 'file:') {
         console.warn('Cannot save in static mode');
