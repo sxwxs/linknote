@@ -38,7 +38,8 @@ def send_login_email(config: dict, recipient: str, token: str, base_url: str) ->
         Hello,
         
         Click the following link to log in to LinkNote:
-        {login_url}
+
+        <a href="{login_url}">{login_url}</a>
         
         This link will expire in 15 minutes.
         
@@ -393,7 +394,7 @@ def create_app(data_dir: Path, config: dict):
             return jsonify({
                 'success': False,
                 'error': 'Login is not enabled'
-            }), 400
+            }), 200
 
         login_config = app.config['LOGIN_CONFIG']
         return jsonify({

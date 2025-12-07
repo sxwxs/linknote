@@ -7,45 +7,13 @@ let currentCaptcha = '';
 let currentFile = 'data.js';
 let currentNoteIndex = null;
 let availableFiles = [];
-const AUTHOR_KEY = 'linknote_author';
-const LOGIN_CHECK_INTERVAL = 2000; // 2 seconds
-const LOGIN_TIMEOUT = 300000; // 5 minutes
+let onGoingRequests = 0;
 
-// Function to get CAPTCHA from backend
-async function drawCaptcha() {
-    try {
-        const response = await fetch('/api/captcha');
-        const data = await response.json();
-        if (data.success) {
-            const img = document.getElementById('captchaImage');
-            img.src = data.image;
-        } else {
-            console.error('Failed to get CAPTCHA');
-        }
-    } catch (error) {
-        console.error('Failed to get CAPTCHA:', error);
-    }
-}
-
-// Login state
-let isLoginEnabled = false;
-let isLoggedIn = false;
-let userInfo = null;
-let loginType = 'oauth';
-let emailLoginEnabled = false;
-let isPrivateSite = false;
-let isAdmin = false;
 
 // DOM Elements
 const searchInput = document.getElementById('search');
 const notesList = document.getElementById('notesList');
 const editDialog = document.getElementById('editDialog');
-const loginDialog = document.getElementById('loginDialog');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const userInfoDiv = document.getElementById('userInfo');
-const usernameSpan = document.getElementById('username');
-const loginStatusDiv = document.getElementById('loginStatus');
 const sortBySelect = document.getElementById('sortBy');
 const duplicateButton = document.getElementById('duplicate');
 const isTemplateUrlCheckbox = document.getElementById('isTemplateUrl');
@@ -88,7 +56,7 @@ uploadFileBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', uploadFiles);
 
 searchInput.addEventListener('input', debounce(filterNotes, 300));
-sortBySelect.addEventListener('change', () => renderNotes());
+sortBySelect.addEventListener('change', () => filterNotes());
 
 isTemplateUrlCheckbox.addEventListener('change', () => {
     updateTemplateParams();
@@ -109,7 +77,7 @@ async function loadNotes() {
 
     if (window.location.protocol === 'file:') {
         notes = window.data || [];
-        renderNotes();
+        filterNotes();
     } else {
         for (let f of availableFiles) {
             loadNotesFromFile(f.name);
@@ -248,7 +216,8 @@ function filterNotes() {
 }
 
 function openEditDialog(note = null) {
-    currentNote = note;
+    currentNote = note
+    currentFile = note.file
     currentNoteIndex = note ? notes[currentFile].indexOf(note) : null;
     document.getElementById('editTitle').value = note ? note.title : '';
     document.getElementById('editLink').value = note ? note.link : '';
@@ -274,10 +243,14 @@ function closeEditDialog() {
 }
 
 function editNote(index) {
-    openEditDialog(displayNotes[index]);
+    if (requireLogin('edit')) {
+        openEditDialog(displayNotes[index]);
+    }
 }
 
 function duplicateNote() {
+    if (!requireLogin('duplicate'))
+        return
     if (!currentNote) return;
     const newNote = {...currentNote};
     newNote.createTime = Date.now();
@@ -285,24 +258,20 @@ function duplicateNote() {
     newNote.title = `${newNote.title} copy`;
     notes[currentFile].push(newNote);
     closeEditDialog();
-    renderNotes();
+    filterNotes();
 }
 
 function duplicateNoteAt(index) {
+    if (!requireLogin('duplicate'))
+        return
     const note = displayNotes[index];
+    currentFile = note.file;
     const newNote = {...note};
     newNote.createTime = Date.now();
     newNote.modifyTime = Date.now();
     newNote.title = `${newNote.title} copy`;
     notes[currentFile].push(newNote);
-    renderNotes();
-}
-
-function deleteNote(index) {
-    if (confirm('Are you sure you want to delete this note?')) {
-        notes[currentFile].splice(index, 1);
-        renderNotes();
-    }
+    filterNotes();
 }
 
 function updateTemplateParams() {
@@ -384,6 +353,9 @@ function replaceUrlParams(url, params) {
 }
 
 async function saveNote() {
+    if (!requireLogin('save'))
+        return;
+
     const title = document.getElementById('editTitle').value.trim();
     const link = document.getElementById('editLink').value.trim();
     const tags = document.getElementById('editTags').value
@@ -423,12 +395,18 @@ async function saveNote() {
     }
 
     closeEditDialog();
-    renderNotes();
-    await saveNotes();
+    filterNotes();
+    await saveNotes(currentFile);
 }
 
-async function saveNotes() {
-    const targetFile = targetFileSelect.value;
+async function saveNotes(targetFile) {
+    if (!targetFile) {
+        // save all
+        for (let file in notes) {
+            await saveNotes(file);
+        }
+    }
+        
 
     if (window.location.protocol === 'file:') {
         console.warn('Cannot save in static mode');
@@ -478,191 +456,6 @@ function debounce(func, wait) {
     };
 }
 
-// Login Functions
-async function checkLoginEnabled() {
-    try {
-        const response = await fetch('/api/notes');
-        // isLoginEnabled = response.headers.get('X-Login-Enabled') === 'true';
-        loginBtn.style.display = isLoginEnabled ? 'block' : 'none';
-    } catch (error) {
-        console.error('Failed to check login status:', error);
-    }
-}
-
-async function requestLogin() {
-    try {
-        // Get login type first
-        const typeResponse = await fetch('/api/login/type');
-        const typeResult = await typeResponse.json();
-
-        if (!typeResult.success) {
-            throw new Error(typeResult.error);
-        }
-
-        loginType = typeResult.type;
-        emailLoginEnabled = typeResult.email_enabled;
-
-        // Show appropriate login method
-        document.getElementById('oauthLogin').style.display = loginType === 'oauth' ? 'block' : 'none';
-        document.getElementById('emailLogin').style.display = loginType === 'email' ? 'block' : 'none';
-
-        if (loginType === 'oauth') {
-            loginStatusDiv.textContent = 'Generating login QR code...';
-            loginStatusDiv.className = '';
-
-            const response = await fetch('/api/login/request', {
-                method: 'POST'
-            });
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error);
-            }
-
-            // Generate QR Code
-            const qrCodeDiv = document.getElementById('qrCode');
-            qrCodeDiv.innerHTML = '';
-            await QRCode.toCanvas(qrCodeDiv, result.login_url, {
-                width: 256,
-                margin: 2
-            });
-
-            // Start checking login status
-            startLoginCheck();
-        }
-    } catch (error) {
-        loginStatusDiv.textContent = `Login failed: ${error.message}`;
-        loginStatusDiv.className = 'error';
-    }
-}
-
-async function requestEmailLogin() {
-    try {
-        const email = document.getElementById('loginEmail').value;
-        if (!email) {
-            throw new Error('Email is required');
-        }
-
-        loginStatusDiv.textContent = 'Sending login email...';
-        loginStatusDiv.className = '';
-
-        const response = await fetch('/api/login/email/request', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-        body: JSON.stringify({ 
-            email,
-            captcha: document.getElementById('captchaInput').value
-        })
-        });
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.error);
-        }
-
-        loginStatusDiv.textContent = 'Login email sent! Please check your inbox.';
-        loginStatusDiv.className = 'success';
-        document.getElementById('loginEmail').value = '';
-        startLoginCheck();
-    } catch (error) {
-        loginStatusDiv.textContent = `Login failed: ${error.message}`;
-        loginStatusDiv.className = 'error';
-    }
-}
-
-function startLoginCheck() {
-    let startTime = Date.now();
-    loginStatusDiv.textContent = 'Waiting for login...';
-    loginStatusDiv.className = '';
-
-    loginCheckInterval = setInterval(async () => {
-        try {
-            // Check timeout
-            if (Date.now() - startTime > LOGIN_TIMEOUT) {
-                clearInterval(loginCheckInterval);
-                loginStatusDiv.textContent = 'Login timeout. Please try again.';
-                loginStatusDiv.className = 'error';
-                return;
-            }
-
-            let response;
-            if (loginType === 'email') {
-                response = await fetch('/api/login/email/status');
-            } else {
-                response = await fetch('/api/login/check');
-            }
-            const result = await response.json();
-
-            if (result.success) {
-                clearInterval(loginCheckInterval);
-                userInfo = result.user_info || { email: result.email };
-                isLoggedIn = true;
-                closeLoginDialog();
-                updateLoginUI();
-                updateActionButtons();
-                if (!isPrivateSite || isLoggedIn) {
-                    await loadNotes();
-                }
-            } else if (loginType === 'email' && result.status === 'pending') {
-                loginStatusDiv.textContent = `Waiting for login (sent to ${result.email})...`;
-            }
-        } catch (error) {
-            console.error('Failed to check login status:', error);
-        }
-    }, LOGIN_CHECK_INTERVAL);
-}
-
-function updateLoginUI() {
-    if (isLoggedIn && userInfo) {
-        loginBtn.style.display = 'none';
-        userInfoDiv.style.display = 'flex';
-        usernameSpan.textContent = userInfo.name || userInfo.email || 'User';
-    } else {
-        loginBtn.style.display = isLoginEnabled ? 'block' : 'none';
-        userInfoDiv.style.display = 'none';
-        usernameSpan.textContent = '';
-    }
-}
-
-function openLoginDialog() {
-    loginDialog.classList.add('active');
-}
-
-function closeLoginDialog() {
-    loginDialog.classList.remove('active');
-    if (loginCheckInterval) {
-        clearInterval(loginCheckInterval);
-        loginCheckInterval = null;
-    }
-}
-
-async function logout() {
-    try {
-        await fetch('/api/logout');
-        isLoggedIn = false;
-        userInfo = null;
-        updateLoginUI();
-        updateActionButtons();
-        if (isPrivateSite) {
-            notes = [];
-            renderNotes();
-        }
-    } catch (error) {
-        console.error('Failed to logout:', error);
-    }
-}
-
-// Check if operation is allowed
-function requireLogin(operation) {
-    if (!isLoginEnabled || isLoggedIn) {
-        return true;
-    }
-    alert('Please login to perform this operation');
-    return false;
-}
-
 // Event Listeners for Login
 // Event Listeners for Login
 loginBtn.addEventListener('click', () => {
@@ -680,68 +473,6 @@ document.getElementById('refreshCaptcha').addEventListener('click', () => {
     document.getElementById('captchaInput').value = '';
 });
 
-logoutBtn.addEventListener('click', logout);
-
-document.getElementById('cancelLogin').addEventListener('click', closeLoginDialog);
-
-// Login check and initialization
-async function checkLoginType() {
-    try {
-        const response = await fetch('/api/login/type');
-        const result = await response.json();
-        if (result.success) {
-            loginType = result.type;
-            emailLoginEnabled = result.email_enabled;
-            isPrivateSite = result.private;
-            if (emailLoginEnabled)
-            {
-                isLoginEnabled = true;
-                updateLoginUI();
-            }   
-        }
-    } catch (error) {
-        console.error('Failed to check login type:', error);
-    }
-}
-
-async function checkLoginState() {
-    try {
-        const response = await fetch('/api/login/state');
-        const state = await response.json();
-        isLoggedIn = state.logged_in;
-        isAdmin = state.is_admin;
-        if (state.logged_in) {
-            userInfo = state.user_info;
-            updateLoginUI();
-        }
-    } catch (error) {
-        console.error('Failed to check login state:', error);
-    }
-}
-
-function updateActionButtons() {
-    const newNoteBtn = document.getElementById('newNote');
-    const saveAllBtn = document.getElementById('saveAll');
-    const manageFilesBtn = document.getElementById('manageFiles');
-
-    if (isPrivateSite && !isLoggedIn) {
-        newNoteBtn.style.display = 'none';
-        saveAllBtn.style.display = 'none';
-        manageFilesBtn.style.display = 'none';
-        return;
-    }
-
-    if (isPrivateSite && !isAdmin) {
-        newNoteBtn.style.display = 'none';
-        saveAllBtn.style.display = 'none';
-        manageFilesBtn.style.display = 'none';
-        return;
-    }
-
-    newNoteBtn.style.display = 'block';
-    saveAllBtn.style.display = 'block';
-    manageFilesBtn.style.display = 'block';
-}
 
 // Initialize
 window.addEventListener('load', async () => {
@@ -765,50 +496,23 @@ window.addEventListener('load', async () => {
             'is_public': true,
             'size': 0
         }];
-        await loadNotes();
     }
     else
-        await loadAvailableFiles(); // Load available files on startup
-    if (!isPrivateSite || isLoggedIn) {
-        await loadNotes();
-    }
+        await loadAvailableFiles();
+
+    await loadNotes();
     updateActionButtons();
 });
 
-// Update protected operations
-const originalEditNote = editNote;
-const originalDeleteNote = deleteNote;
-const originalSaveNote = saveNote;
-const originalDuplicateNote = duplicateNote;
-const originalDuplicateNoteAt = duplicateNoteAt;
-
-editNote = (index) => {
-    if (requireLogin('edit')) {
-        originalEditNote(index);
-    }
-};
-
 deleteNote = (index) => {
     if (requireLogin('delete')) {
-        originalDeleteNote(index);
-    }
-};
-
-saveNote = async () => {
-    if (requireLogin('save')) {
-        await originalSaveNote();
-    }
-};
-
-duplicateNote = () => {
-    if (requireLogin('duplicate')) {
-        originalDuplicateNote();
-    }
-};
-
-duplicateNoteAt = (index) => {
-    if (requireLogin('duplicate')) {
-        originalDuplicateNoteAt(index);
+        if (confirm('Are you sure you want to delete this note?')) {
+            const note = displayNotes[index];
+            const file = note.file;
+            const noteIndex = notes[file].indexOf(note);
+            notes[file].splice(noteIndex, 1);
+            filterNotes();
+        }
     }
 };
 
@@ -992,6 +696,7 @@ async function createNewFile() {
 async function loadNotesFromFile(filename) {
     currentFile = filename;
     try {
+        onGoingRequests += 1;
         const response = await fetch(`/api/notes?file=${encodeURIComponent(filename)}`);
         const result = await response.json();
         if (result.success) {
@@ -1003,13 +708,15 @@ async function loadNotesFromFile(filename) {
                 ++index
             }
             notes[filename] = data
-            renderNotes();
-            closeFileManagement();
             console.log(`Loaded notes from ${filename}`);
         } else {
             throw new Error(result.error);
         }
+        onGoingRequests -= 1;
+        if (onGoingRequests === 0)
+            filterNotes();
     } catch (error) {
+        onGoingRequests -= 1;
         alert(`Failed to load notes from ${filename}: ${error.message}`);
     }
 }
