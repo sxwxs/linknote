@@ -217,8 +217,7 @@ function filterNotes() {
 
 function openEditDialog(note = null) {
     currentNote = note
-    currentFile = note.file
-    currentNoteIndex = note ? notes[currentFile].indexOf(note) : null;
+    currentNoteIndex = note ? notes[note.file].indexOf(note) : null;
     document.getElementById('editTitle').value = note ? note.title : '';
     document.getElementById('editLink').value = note ? note.link : '';
     document.getElementById('editTags').value = note ? note.tags.join(', ') : '';
