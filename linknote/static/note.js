@@ -387,15 +387,21 @@ async function saveNote() {
     };
 
     if (currentNote) {
+        if (currentFile !== targetFile) {
+            // Move to target file
+            alert('Note file cannot be changed during edit. To move the note, please use the Move Note feature.');
+            return;
+        }
         const index = notes[currentFile].indexOf(currentNote);
         notes[currentFile][index] = note;
-    } else {
+    }
+    else {
         notes[targetFile].push(note);
     }
 
     closeEditDialog();
     filterNotes();
-    await saveNotes(currentFile);
+    await saveNotes(targetFile);
 }
 
 async function saveNotes(targetFile) {
