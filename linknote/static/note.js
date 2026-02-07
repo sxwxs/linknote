@@ -383,17 +383,19 @@ async function saveNote() {
         author,
         isTemplateUrl,
         createTime: currentNote ? currentNote.createTime : Date.now(),
-        modifyTime: Date.now()
+        modifyTime: Date.now(),
+        file: currentNote ? currentNote.file : targetFile
     };
 
     if (currentNote) {
-        if (currentFile !== targetFile) {
+        if (currentNote.file !== targetFile) {
             // Move to target file
             alert('Note file cannot be changed during edit. To move the note, please use the Move Note feature.');
             return;
         }
-        const index = notes[currentFile].indexOf(currentNote);
-        notes[currentFile][index] = note;
+        const noteFile = currentNote.file;
+        const index = notes[noteFile].indexOf(currentNote);
+        notes[noteFile][index] = note;
     }
     else {
         notes[targetFile].push(note);
