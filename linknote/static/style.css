@@ -210,7 +210,7 @@ button:hover {
     background: white;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .note-card h3 {
@@ -269,7 +269,7 @@ button:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     z-index: 1000;
     align-items: center;
     justify-content: center;
@@ -415,7 +415,8 @@ button:hover {
     display: block;
 }
 
-.upload-section, .create-file-section {
+.upload-section,
+.create-file-section {
     display: flex;
     gap: 10px;
     margin-bottom: 20px;
@@ -525,26 +526,26 @@ button:hover {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .actions {
         justify-content: center;
     }
-    
+
     .file-item {
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
     }
-    
+
     .file-actions {
         justify-content: center;
     }
-    
+
     #fileManagement {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .dialog-content {
         width: 95%;
         padding: 20px;

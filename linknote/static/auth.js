@@ -98,10 +98,10 @@ async function requestEmailLogin() {
             headers: {
                 'Content-Type': 'application/json'
             },
-        body: JSON.stringify({ 
-            email,
-            captcha: document.getElementById('captchaInput').value
-        })
+            body: JSON.stringify({
+                email,
+                captcha: document.getElementById('captchaInput').value
+            })
         });
 
         const result = await response.json();
@@ -223,11 +223,10 @@ async function checkLoginType() {
             loginType = result.type;
             emailLoginEnabled = result.email_enabled;
             isPrivateSite = result.private;
-            if (emailLoginEnabled)
-            {
+            if (emailLoginEnabled) {
                 isLoginEnabled = true;
                 updateLoginUI();
-            }   
+            }
         }
     } catch (error) {
         console.error('Failed to check login type:', error);

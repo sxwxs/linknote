@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Visitors Report - LinkNote</title>
     <link rel="stylesheet" href="style.css">
@@ -10,14 +11,18 @@
             margin: 20px auto;
             border-collapse: collapse;
         }
-        .visitor-list th, .visitor-list td {
+
+        .visitor-list th,
+        .visitor-list td {
             padding: 10px;
             border: 1px solid #ddd;
             text-align: left;
         }
+
         .visitor-list th {
             background-color: #f5f5f5;
         }
+
         .error-message {
             color: red;
             text-align: center;
@@ -26,6 +31,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Visitors Report</h1>
@@ -66,7 +72,7 @@
 
                     const tbody = document.getElementById('visitorList');
                     tbody.innerHTML = '';
-                    
+
                     data.visitors.forEach(visitor => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
@@ -92,4 +98,5 @@
         }
     </script>
 </body>
+
 </html>

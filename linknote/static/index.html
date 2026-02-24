@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -46,7 +47,7 @@
                     <h2>Edit Note</h2>
                     <input type="text" id="editTitle" placeholder="Title">
                     <input type="text" id="editAuthor" placeholder="Author">
-                    
+
                     <div class="link-section">
                         <div class="template-check">
                             <input type="checkbox" id="isTemplateUrl">
@@ -58,7 +59,7 @@
 
                     <input type="text" id="editTags" placeholder="Tags (comma separated)">
                     <textarea id="editDescription" placeholder="Description (markdown supported)"></textarea>
-                    
+
                     <div class="save-options">
                         <div id="fileManagement" style="margin-top: 10px;">
                             <label>File:</label>
@@ -115,7 +116,7 @@
                 <button class="tab-btn active" data-tab="uploaded">Uploaded Files</button>
                 <button class="tab-btn" data-tab="data">Data Files</button>
             </div>
-            
+
             <div id="uploadedFilesTab" class="tab-content active">
                 <div class="upload-section">
                     <input type="file" id="uploadInput" multiple>
@@ -123,7 +124,7 @@
                 </div>
                 <div id="uploadedFilesList"></div>
             </div>
-            
+
             <div id="dataFilesTab" class="tab-content">
                 <div class="create-file-section">
                     <input type="text" id="newFileName" placeholder="Enter filename (e.g., notes.js)">
@@ -131,7 +132,7 @@
                 </div>
                 <div id="dataFilesList"></div>
             </div>
-            
+
             <div class="dialog-buttons">
                 <button id="closeFileManagement">Close</button>
             </div>
@@ -161,7 +162,7 @@
                 <button id="cancelCreateFile">Cancel</button>
             </div>
         </div>
-
+    </div>
     <!-- Load data.js if in static mode -->
     <script>
         // Check if we're running in static mode (not served by Flask)
@@ -176,13 +177,13 @@
     <script src="note.js"></script>
     <script>
         // Add Enter key support for login email and CAPTCHA inputs
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const loginEmailInput = document.getElementById('loginEmail');
             const captchaInput = document.getElementById('captchaInput');
             const sendLoginEmailBtn = document.getElementById('sendLoginEmail');
 
             if (loginEmailInput) {
-                loginEmailInput.addEventListener('keypress', function(e) {
+                loginEmailInput.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
                         if (captchaInput && captchaInput.value.trim() !== '') {
@@ -193,7 +194,7 @@
             }
 
             if (captchaInput) {
-                captchaInput.addEventListener('keypress', function(e) {
+                captchaInput.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
                         if (loginEmailInput && loginEmailInput.value.trim() !== '') {
@@ -206,4 +207,5 @@
     </script>
     <script src="https://unpkg.com/stackedit-js@1.0.7/docs/lib/stackedit.min.js"></script>
 </body>
+
 </html>

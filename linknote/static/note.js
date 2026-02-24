@@ -205,9 +205,9 @@ function filterNotes() {
 
             return terms.every(term => {
                 return title.includes(term) ||
-                       desc.includes(term) ||
-                       tags.some(tag => tag.includes(term)) ||
-                       author.includes(term);
+                    desc.includes(term) ||
+                    tags.some(tag => tag.includes(term)) ||
+                    author.includes(term);
             });
         });
         filtered = filtered.concat(currentFiltered)
@@ -251,7 +251,7 @@ function duplicateNote() {
     if (!requireLogin('duplicate'))
         return
     if (!currentNote) return;
-    const newNote = {...currentNote};
+    const newNote = { ...currentNote };
     newNote.createTime = Date.now();
     newNote.modifyTime = Date.now();
     newNote.title = `${newNote.title} copy`;
@@ -265,7 +265,7 @@ function duplicateNoteAt(index) {
         return
     const note = displayNotes[index];
     currentFile = note.file;
-    const newNote = {...note};
+    const newNote = { ...note };
     newNote.createTime = Date.now();
     newNote.modifyTime = Date.now();
     newNote.title = `${newNote.title} copy`;
@@ -296,7 +296,7 @@ function updateTemplateParams() {
 
     // Add input handlers
     params.forEach(param => {
-        document.getElementById(`dialog-param-${param}`).addEventListener('input', 
+        document.getElementById(`dialog-param-${param}`).addEventListener('input',
             () => updateTemplateUrlPreview(link));
     });
     updateTemplateUrlPreview(link);
@@ -456,7 +456,7 @@ function escapeHtml(str) {
 
 function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
@@ -540,7 +540,7 @@ function updateFileSelects() {
     const selects = [targetFileSelect, document.getElementById('moveTargetFile')];
     selects.forEach(select => {
         if (select) {
-            select.innerHTML = availableFiles.map(file => 
+            select.innerHTML = availableFiles.map(file =>
                 `<option value="${file.name}">${file.name}${file.is_public ? ' (Public)' : ''}</option>`
             ).join('');
         }
