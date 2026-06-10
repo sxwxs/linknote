@@ -16,6 +16,11 @@ login:
   email:
     # Enable/disable email login
     enabled: false
+    # Allow anyone with a valid email address to request a login link.
+    # If false, only `allowed_emails` (or `admin_email` as a fallback) can log in.
+    allow_anyone: false
+    # Comma-separated string or YAML list of emails allowed when allow_anyone=false.
+    allowed_emails: []
     # Email account for sending login links
     account: ""
     # Email password or app-specific password
@@ -23,6 +28,22 @@ login:
     # SMTP server settings
     smtp_server: "smtp.gmail.com"
     smtp_port: 587
+    # Advanced SMTP settings (optional)
+    smtp_use_ssl: false
+    smtp_starttls: true
+    # Magic-link and CAPTCHA settings
+    token_ttl_seconds: 900
+    require_captcha: true
+    captcha:
+      ttl_seconds: 300
+    # If set, used to build the verify URL in emails (otherwise uses request.url_root).
+    base_url: ""
+    # Where to redirect after clicking the email link.
+    redirect_path: "/static/index.html"
+    # Daily logs written as YYYY-mm-dd.log inside these directories.
+    logs:
+      login_dir: "logs/login"
+      email_dir: "logs/email"
   
   # OAuth configuration (legacy)
   # Application ID for authentication

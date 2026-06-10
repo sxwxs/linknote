@@ -101,10 +101,25 @@ def config(output):
             'type': 'email',
             'email': {
                 'enabled': True,
+                'allow_anyone': False,
+                'allowed_emails': ['admin@es2q.com', 'root@es2q.com'],
                 'account': 'your-email@gmail.com',
                 'password': 'your-app-password',
                 'smtp_server': 'smtp.gmail.com',
                 'smtp_port': 465,
+                'smtp_use_ssl': True,
+                'smtp_starttls': False,
+                'token_ttl_seconds': 900,
+                'require_captcha': True,
+                'captcha': {
+                    'ttl_seconds': 300,
+                },
+                'base_url': '',
+                'redirect_path': '/static/index.html',
+                'logs': {
+                    'login_dir': 'logs/login',
+                    'email_dir': 'logs/email',
+                },
                 'endpoint': 'https://your-login-endpoint.com',
                 'admin_email': 'admin@es2q.com,root@es2q.com',
             }

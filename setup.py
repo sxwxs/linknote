@@ -28,6 +28,9 @@ setup(
             'static/script.js',
             'static/data.js'
         ],
+        'linknote_email_auth': [
+            'static/email_auth.js',
+        ],
     },
     python_requires='>=3.7',
     author="sxwxs",

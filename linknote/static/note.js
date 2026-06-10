@@ -467,16 +467,9 @@ function debounce(func, wait) {
 loginBtn.addEventListener('click', () => {
     openLoginDialog();
     requestLogin();
-    drawCaptcha(); // Generate initial CAPTCHA
-});
-
-document.getElementById('sendLoginEmail').addEventListener('click', () => {
-    requestEmailLogin();
-});
-
-document.getElementById('refreshCaptcha').addEventListener('click', () => {
-    drawCaptcha();
-    document.getElementById('captchaInput').value = '';
+    if (window.LinknoteEmailAuth && window.LinknoteEmailAuth.drawCaptcha) {
+        window.LinknoteEmailAuth.drawCaptcha(); // Generate initial CAPTCHA
+    }
 });
 
 

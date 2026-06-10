@@ -5,15 +5,12 @@ import secrets
 import smtplib
 import time
 import io
-import base64
 import logging
 from logging.handlers import RotatingFileHandler
-from captcha.image import ImageCaptcha
 from datetime import datetime
 from pathlib import Path
 from functools import wraps
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify, redirect, session, Response, url_for, send_file
 from werkzeug.utils import secure_filename
 from typing import Dict, Optional
@@ -21,48 +18,12 @@ import mimetypes
 
 # Store login tokens and their states
 login_tokens: Dict[str, dict] = {}
-# Store email login tokens
-email_tokens: Dict[str, dict] = {}
 
 # Store visitor data
 visitor_data = set()
 last_email_sent = 0
 
-def send_login_email(config: dict, recipient: str, token: str, base_url: str) -> bool:
-    """Send login email with token."""
-    # try:
-    if True:
-        email_config = config['email']
-        login_url = f"{base_url}/api/login/email/verify?token={token}"
-        body = f"""
-        Hello,
-        
-        Click the following link to log in to LinkNote:
-
-        <a href="{login_url}">{login_url}</a>
-        
-        This link will expire in 15 minutes.
-        
-        If you didn't request this login, please ignore this email.
-        """
-        msg=MIMEText(body,'html','utf-8')
-        msg['From'] = email_config['account']
-        msg['To'] = recipient
-        msg['Subject'] = "LinkNote Login Link"
-        smtpObj = smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port'])
-        r = smtpObj.login(email_config['account'], email_config['password'])
-        print(r)
-        smtpObj.sendmail(email_config['account'],[recipient,],msg.as_string()) 
-        smtpObj.quit()
-
-        # server.starttls()
-        # server.login(email_config['account'], email_config['password'])
-        # server.send_message(msg)
-        # server.quit()
-        return True
-    # except Exception as e:
-    #     print(f"Error sending email: {e}")
-    #     return False
+from linknote_email_auth import create_email_auth_blueprint
 
 def load_visitor_data(config: dict) -> set:
     """Load visitor data from file if it exists."""
@@ -146,6 +107,9 @@ def create_app(data_dir: Path, config: dict):
     except FileExistsError:
         pass
     print(f"Data directory set to: {data_dir}")
+
+    # Email magic-link auth (CAPTCHA + request/status/verify endpoints + frontend JS).
+    app.register_blueprint(create_email_auth_blueprint())
 
     def login_state():
         """Get the current login state."""
@@ -345,48 +309,6 @@ def create_app(data_dir: Path, config: dict):
                 'error': str(e)
             }), 500
 
-    @app.route('/api/captcha', methods=['GET'])
-    def get_captcha():
-        """Generate and return a new CAPTCHA image."""
-        image = ImageCaptcha(width=280, height=90)
-        
-        # Generate random CAPTCHA text
-        chars = '23456789ABCDEFGHIJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-        captcha_text = ''.join(secrets.choice(chars) for _ in range(6))
-        
-        # Store CAPTCHA text in session
-        session['captcha'] = captcha_text
-        session['captcha_time'] = time.time()
-        
-        # Generate image
-        img_bytes = image.generate(captcha_text)
-        
-        # Convert to base64
-        img_base64 = base64.b64encode(img_bytes.getvalue()).decode()
-        
-        return jsonify({
-            'success': True,
-            'image': f'data:image/png;base64,{img_base64}'
-        })
-        
-    @app.route('/api/login/verify-captcha', methods=['POST'])
-    def verify_captcha():
-        """Verify the CAPTCHA value."""
-        captcha = request.json.get('captcha')
-        if not captcha:
-            return jsonify({
-                'success': False,
-                'error': 'CAPTCHA is required'
-            }), 400
-        
-        if captcha.lower() == session.get('captcha', '').lower():
-            return jsonify({'success': True})
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid CAPTCHA'
-            }), 400
-            
     @app.route('/api/login/type', methods=['GET'])
     def get_login_type():
         """Get the configured login type."""
@@ -403,120 +325,6 @@ def create_app(data_dir: Path, config: dict):
             'private': private,
             'email_enabled': login_config['email']['enabled'] if login_config['type'] == 'email' else False
         })
-
-    @app.route('/api/login/email/request', methods=['POST'])
-    def request_email_login():
-        """Generate and send email login token."""
-        if not app.config['LOGIN_ENABLED']:
-            return jsonify({
-                'success': False,
-                'error': 'Login is not enabled'
-            }), 400
-
-        login_config = app.config['LOGIN_CONFIG']
-        if login_config['type'] != 'email' or not login_config['email']['enabled']:
-            return jsonify({
-                'success': False,
-                'error': 'Email login is not enabled'
-            }), 400
-
-        email = request.json.get('email')
-        captcha = request.json.get('captcha')
-        
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email is required'
-            }), 400
-        # check time out
-        if time.time() - session.get('captcha_time', 0) > 300:  # 5 minutes timeout
-            return jsonify({
-                'success': False,
-                'error': 'CAPTCHA expired'
-            }), 400
-        if not captcha or captcha.lower() != session.get('captcha', '').lower():
-            return jsonify({
-                'success': False,
-                'error': 'Invalid CAPTCHA'
-            }), 400
-        session['captcha'] = None  # Clear CAPTCHA after use
-        session['captcha_time'] = 0
-        # Generate token
-        token = secrets.token_urlsafe(32)
-        email_tokens[token] = {
-            'email': email,
-            'status': 'pending'
-        }
-
-        # Send email with login link
-        base_url = request.url_root.rstrip('/')
-        if send_login_email(login_config, email, token, base_url):
-            session['token'] = token
-            # Log email sent event
-            log_auth_event(
-                'EMAIL_SENT',
-                email,
-                request.headers.get('User-Agent', 'Unknown')
-            )
-            return jsonify({
-                'success': True,
-                'message': 'Login email sent'
-            })
-        else:
-            del email_tokens[token]
-            return jsonify({
-                'success': False,
-                'error': 'Failed to send login email'
-            }), 500
-
-    @app.route('/api/login/email/status', methods=['GET'])
-    def login_status():
-        token = session.get('token')
-        if not token or token not in email_tokens:
-            return jsonify({
-                'success': False,
-                'error': 'No active login request'
-            }), 400
-        else:
-            token_data = email_tokens[token]
-            if token_data['status'] == 'pending':
-                return jsonify({
-                    'success': False,
-                    'status': token_data['status'],
-                    'email': token_data['email']
-                })
-            elif token_data['status'] == 'success':
-                email = token_data['email']
-                session['user_info'] = {
-                    'email': email,
-                }
-                del email_tokens[token]
-                session.pop('token', None)
-                
-                # Log successful login
-                log_auth_event(
-                    'LOGIN_SUCCESS',
-                    email,
-                    request.headers.get('User-Agent', 'Unknown')
-                )
-                return jsonify({
-                    'success': True,
-                    'status': token_data['status'],
-                    'email': token_data['email']
-                })
-
-    @app.route('/api/login/email/verify')
-    def verify_email_login():
-        """Verify email login token."""
-        token = request.args.get('token')
-        if not token or token not in email_tokens:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid token'
-            }), 400
-        token_data = email_tokens[token]
-        token_data['status'] = 'success'
-        return redirect('/static/index.html')
 
     @app.route('/api/login/request', methods=['POST'])
     def request_login():

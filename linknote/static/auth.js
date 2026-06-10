@@ -18,23 +18,16 @@ const userInfoDiv = document.getElementById('userInfo');
 const usernameSpan = document.getElementById('username');
 const loginStatusDiv = document.getElementById('loginStatus');
 
-
-// Function to get CAPTCHA from backend
-async function drawCaptcha() {
-    try {
-        const response = await fetch('/api/captcha');
-        const data = await response.json();
-        if (data.success) {
-            const img = document.getElementById('captchaImage');
-            img.src = data.image;
-        } else {
-            console.error('Failed to get CAPTCHA');
-        }
-    } catch (error) {
-        console.error('Failed to get CAPTCHA:', error);
+async function handleLoginSuccess(newUserInfo) {
+    userInfo = newUserInfo;
+    isLoggedIn = true;
+    closeLoginDialog();
+    updateLoginUI();
+    updateActionButtons();
+    if (!isPrivateSite || isLoggedIn) {
+        await loadNotes();
     }
 }
-
 
 async function requestLogin() {
     try {
@@ -83,42 +76,6 @@ async function requestLogin() {
     }
 }
 
-async function requestEmailLogin() {
-    try {
-        const email = document.getElementById('loginEmail').value;
-        if (!email) {
-            throw new Error('Email is required');
-        }
-
-        loginStatusDiv.textContent = 'Sending login email...';
-        loginStatusDiv.className = '';
-
-        const response = await fetch('/api/login/email/request', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                email,
-                captcha: document.getElementById('captchaInput').value
-            })
-        });
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.error);
-        }
-
-        loginStatusDiv.textContent = 'Login email sent! Please check your inbox.';
-        loginStatusDiv.className = 'success';
-        document.getElementById('loginEmail').value = '';
-        startLoginCheck();
-    } catch (error) {
-        loginStatusDiv.textContent = `Login failed: ${error.message}`;
-        loginStatusDiv.className = 'error';
-    }
-}
-
 function startLoginCheck() {
     let startTime = Date.now();
     loginStatusDiv.textContent = 'Waiting for login...';
@@ -135,25 +92,12 @@ function startLoginCheck() {
             }
 
             let response;
-            if (loginType === 'email') {
-                response = await fetch('/api/login/email/status');
-            } else {
-                response = await fetch('/api/login/check');
-            }
+            response = await fetch('/api/login/check');
             const result = await response.json();
 
             if (result.success) {
                 clearInterval(loginCheckInterval);
-                userInfo = result.user_info || { email: result.email };
-                isLoggedIn = true;
-                closeLoginDialog();
-                updateLoginUI();
-                updateActionButtons();
-                if (!isPrivateSite || isLoggedIn) {
-                    await loadNotes();
-                }
-            } else if (loginType === 'email' && result.status === 'pending') {
-                loginStatusDiv.textContent = `Waiting for login (sent to ${result.email})...`;
+                await handleLoginSuccess(result.user_info);
             }
         } catch (error) {
             console.error('Failed to check login status:', error);
@@ -182,6 +126,10 @@ function closeLoginDialog() {
     if (loginCheckInterval) {
         clearInterval(loginCheckInterval);
         loginCheckInterval = null;
+    }
+    if (window.__linknoteEmailAuthInterval) {
+        clearInterval(window.__linknoteEmailAuthInterval);
+        window.__linknoteEmailAuthInterval = null;
     }
 }
 
@@ -247,3 +195,9 @@ async function checkLoginState() {
         console.error('Failed to check login state:', error);
     }
 }
+
+// Email magic-link auth package dispatches this on success.
+window.addEventListener('linknote:login-success', async (e) => {
+    const info = (e && e.detail && e.detail.userInfo) ? e.detail.userInfo : null;
+    if (info) await handleLoginSuccess(info);
+});
